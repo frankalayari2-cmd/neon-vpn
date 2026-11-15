@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 void main() {
@@ -34,17 +35,25 @@ class VpnHomeScreen extends StatefulWidget {
 }
 
 class _VpnHomeScreenState extends State<VpnHomeScreen> {
-  // ۱. لینک تبلیغاتی اختصاصی شما (جایگذاری شده):
+  // ۱. لینک تبلیغاتی اختصاصی شما:
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // ۲. پک کانفیگ‌های V2Ray شما (جایگذاری شده به صورت Base64):
-  final String initialBase64Configs =
-      "dHJvamFuOi8vamNURzlXU1dNSkFtUjRydjEweHB3d0BmYXN0bHkyLmR1bm5leGEuaXI6NDQzP3R5cGU9d3Mmc2VjdXJpdHk9dGxzJnBhdGg9JTJGVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVImaG9zdD1jb3B5X2F6X2NoYW5uZWxfTlVGaUxURVJfMTdpLmdsb2JhbC5zc2wuZmFzdGx5Lm5ldC4mc25pPWNkbi5ha2FtYWkuc3RlYW1zdGF0aWMuY29tJnBpblNIQTI1Nj1jZDZlODM4YjliZmUzMWNhYjhiM2Q1Yzg1OGIwZDYyMjNmZTg0ZWNlMjM2YzFmZGIyODFiZTkzYzMwMmUxZTZlJnBjcz1jZDZlODM4YjliZmUzMWNhYjhiM2Q1Yzg1OGIwZDYyMjNmZTg0ZWNlMjM2YzFmZGIyODFiZTkzYzMwMmUxZTZlIyU0MFZwbl9TaGllbGQlMjAlN0MlMjAlRjAlOUYlOTQlQTUlMjA1ODMKCnRyb2phbjovL2pjVEc5V1NXTUpBbVI0cnYxMHhwd3dAMTk5LjIzMi43OC4xNTk6NDQzP3R5cGU9d3Mmc2VjdXJpdHk9dGxzJnBhdGg9JTJGVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVImaG9zdD1jb3B5X2F6X2NoYW5uZWxfTlVGaUxURVJfN2kuZ2xvYmFsLnNzbC5mYXN0bHkubmV0LiZzbmk9Y2RuLmFrYW1haS5zdGVhbXN0YXRpYy5jb20mcGluU0hBMjU2PWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUmcGNzPWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUjJTQwVnBuX1NoaWVsZCUyMCU3QyUyMCVGMCU5RiU5NCVBNSUyMDEyNgoKdHJvamFuOi8vamNURzlXU1dNSkFtUjRydjEweHB3d0AxOTkuMjMyLjc4LjE1OTo0NDM/dHlwZT13cyZzZWN1cml0eT10bHMmcGF0aD0lMkZURUxFR1JBTS0lNDBTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVItVEVMRUdSQU0tJTQwTlVGaUxURVImaG9zdD1jb3B5X2F6X2NoYW5uZWxfTlVGaUxURVJfNmkuZ2xvYmFsLnNzbC5mYXN0bHkubmV0LiZzbmk9Y2RuLmFrYW1haS5zdGVhbXN0YXRpYy5jb20mcGluU0hBMjU2PWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUmcGNzPWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUjJTQwVnBuX1NoaWVsZCUyMCU3QyUyMCVGMCU5RiU5NCVBNSUyMDc5NAoKdHJvamFuOi8vamNURzlXU1dNSkFtUjRydjEweHB3d0AxOTkuMjMyLjc4LjE1OTo0NDM/dHlwZT13cyZzZWN1cml0eT10bHMmcGF0aD0lMkZURUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUiZob3N0PWNvcHlfYXpfY2hhbm5lbF9OVUZpTFRFUl8xMGkuZ2xvYmFsLnNzbC5mYXN0bHkubmV0LiZzbmk9Y2RuLmFrYW1haS5zdGVhbXN0YXRpYy5jb20mcGluU0hBMjU2PWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUmcGNzPWNkNmU4MzhiOWJmZTMxY2FiOGIzZDVjODU4YjBkNjIyM2ZlODRlY2UyMzZjMWZkYjI4MWJlOTNjMzAyZTFlNmUjJTQwVnBuX1NoaWVsZCUyMCU3QyUyMCVGMCU5RiU5NCVBNSUyMDM1MQoKdHJvamFuOi8vamNURzlXU1dNSkFtUjRydjEweHB3d0AxOTkuMjMyLjc4LjE1OTo0NDM/dHlwZT13cyZzZWN1cml0eT10bHMmcGF0aD0lMkZURUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUi1URUxFR1JBTS0lNDBOVUZpTFRFUiZob3N0PWNvcHlfYXpfY2hhbm5lbF9OVUZpTFRFUl84aS5nbG9iYWwuc3NsLmZhc3RseS5uZXQuJnNuaT1jZG4uYWthbWFpLnN0ZWFtc3RhdGljLmNvbSZwaW5TSEEyNTY9Y2Q2ZTgzOGI5YmZlMzFjYWI4YjNkNWM4NThiMGQ2MjIzZmU4NGVjZTIzNmMxZmRiMjgxYmU5M2MzMDJlMWU2ZSZwY3M9Y2Q2ZTgzOGI5YmZlMzFjYWI4YjNkNWM4NThiMGQ2MjIzZmU4NGVjZTIzNmMxZmRiMjgxYmU5M2MzMDJlMWU2ZSMlNDBWcG5fU2hpZWxkJTIwJTdDJTIwJUYwJTlGJTk0JUE1JTIwOTY4";
+  // ۲. منابع خودکار سرورهای رایگان روزانه (مجهز به CDN ضد فیلتر برای دانلود بدون VPN):
+  final List<String> _autoAggregatorSources = [
+    "https://fastly.jsdelivr.net/gh/barry-far/V2ray-Configs@main/Sub1.txt",
+    "https://fastly.jsdelivr.net/gh/Epodonios/v2ray-configs@main/All_Configs_Sub.txt",
+    "https://fastly.jsdelivr.net/gh/mahdibland/V2RayAggregator@master/sub/sub_merge.txt",
+    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+    "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/mix",
+  ];
 
-  // ۳. لینک آپدیت خودکار سرورها از گیت‌هاب (در صورت نیاز در آینده):
-  final String remoteServersUrl = "https://raw.githubusercontent.com/username/neon-vpn/main/servers.txt";
+  // سرورهای پشتیبان اولیه (در صورتی که کاربر در لحظه اول اینترنت بسیار ضعیفی داشته باشد):
+  List<String> _serverList = [
+    "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server1",
+    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server2",
+    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_6i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server3",
+  ];
 
-  List<String> _serverList = [];
   int _selectedServerIndex = 0;
 
   late final FlutterV2ray _flutterV2ray = FlutterV2ray(
@@ -58,9 +67,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   V2RayStatus _v2rayStatus = V2RayStatus();
   bool _isConnected = false;
   bool _isConnecting = false;
-  int _remainingSeconds = 3600; // ۱ ساعت زمان اولیه رایگان
+  bool _isUpdatingServers = false;
+  int _remainingSeconds = 3600;
   Timer? _usageTimer;
   int _ping = 0;
+  String _statusMessage = "آماده اتصال";
 
   final List<String> _iranianAppsBypass = [
     "ir.divar",
@@ -74,55 +85,167 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadConfigsFromInput(initialBase64Configs);
-    _initVpn();
-    _fetchRemoteServers();
+    _initApp();
   }
 
-  Future<void> _initVpn() async {
+  Future<void> _initApp() async {
     await _flutterV2ray.initializeV2Ray();
+    await _loadSavedState();
+    // دریافت خودکار سرورهای جدید روز به محض باز شدن برنامه
+    _fetchDailyFreeServers(silent: true);
   }
 
-  // استخراج هوشمند کانفیگ‌ها (هم لینک معمولی و هم کدهای Base64)
-  void _loadConfigsFromInput(String rawInput) {
+  // بارگذاری زمان باقی‌مانده و آخرین سرورهای سالم از حافظه گوشی
+  Future<void> _loadSavedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _remainingSeconds = prefs.getInt('remaining_seconds') ?? 3600;
+      final savedServers = prefs.getStringList('saved_servers');
+      if (savedServers != null && savedServers.isNotEmpty) {
+        _serverList = savedServers;
+      }
+    });
+  }
+
+  Future<void> _saveRemainingTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('remaining_seconds', _remainingSeconds);
+  }
+
+  // اعتبارسنجی و استخراج فقط کانفیگ‌های استاندارد و سالم
+  List<String> _extractValidConfigs(String rawInput) {
     String decodedText = rawInput.trim();
     if (!decodedText.contains("://")) {
       try {
-        decodedText = utf8.decode(base64.decode(decodedText.replaceAll('\n', '').replaceAll(' ', '')));
+        String cleanBase64 = decodedText.replaceAll(RegExp(r'\s+'), '');
+        decodedText = utf8.decode(base64.decode(base64.normalize(cleanBase64)), allowMalformed: true);
       } catch (_) {}
     }
 
-    final lines = LineSplitter.split(decodedText)
-        .map((e) => e.trim())
-        .where((e) =>
-            e.startsWith("vless://") ||
-            e.startsWith("vmess://") ||
-            e.startsWith("trojan://") ||
-            e.startsWith("ss://"))
-        .toList();
+    final lines = LineSplitter.split(decodedText).map((e) => e.trim()).toList();
+    final List<String> validConfigs = [];
 
-    if (lines.isNotEmpty) {
+    for (final line in lines) {
+      if (line.startsWith("vless://") ||
+          line.startsWith("vmess://") ||
+          line.startsWith("trojan://") ||
+          line.startsWith("ss://")) {
+        try {
+          // بررسی اینکه کانفیگ ساختار سالمی برای هسته V2Ray داشته باشد
+          FlutterV2ray.parseFromURL(line);
+          validConfigs.add(line);
+        } catch (_) {}
+      }
+      if (validConfigs.length >= 40) break; // گلچین ۴۰ سرور اول برای سرعت بالا
+    }
+    return validConfigs;
+  }
+
+  // دریافت خودکار سرورهای روزانه از منابع عمومی
+  Future<void> _fetchDailyFreeServers({bool silent = false}) async {
+    if (_isUpdatingServers) return;
+    setState(() {
+      _isUpdatingServers = true;
+      _statusMessage = "در حال دریافت سرورهای جدید روز...";
+    });
+
+    List<String> fetchedConfigs = [];
+
+    for (final url in _autoAggregatorSources) {
+      try {
+        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
+        if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
+          fetchedConfigs = _extractValidConfigs(response.body);
+          if (fetchedConfigs.length >= 5) {
+            break; // به محض دریافت لیست سالم از اولین منبع، متوقف شود
+          }
+        }
+      } catch (_) {
+        continue; // اگر منبع اول فیلتر یا قطع بود، سراغ منبع بعدی برود
+      }
+    }
+
+    if (fetchedConfigs.isNotEmpty) {
       setState(() {
-        _serverList = lines;
+        _serverList = fetchedConfigs;
         _selectedServerIndex = 0;
+        _statusMessage = "${fetchedConfigs.length} سرور جدید روزانه بارگذاری شد";
       });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('saved_servers', fetchedConfigs);
+
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green.shade700,
+            content: Text("✅ ${fetchedConfigs.length} سرور رایگان جدید با موفقیت دریافت شد!"),
+          ),
+        );
+      }
+      // تست خودکار پینگ سرورها و انتخاب سریع‌ترین سرور
+      await _autoSelectFastestServer();
+    } else {
+      setState(() => _statusMessage = "استفاده از سرورهای ذخیره شده");
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("خطا در دریافت لیست جدید؛ لطفاً اینترنت خود را بررسی کنید.")),
+        );
+      }
+    }
+
+    setState(() => _isUpdatingServers = false);
+  }
+
+  // تست پینگ خودکار بین سرورهای دریافت شده و انتخاب سریع‌ترین سرور سالم
+  Future<void> _autoSelectFastestServer() async {
+    if (_serverList.isEmpty || _isConnected) return;
+
+    setState(() => _statusMessage = "در حال تست پینگ و یافتن بهترین سرور...");
+
+    final int testCount = _serverList.length > 12 ? 12 : _serverList.length;
+    int bestIndex = 0;
+    int bestPing = 99999;
+
+    final List<Future<void>> tasks = [];
+    for (int i = 0; i < testCount; i++) {
+      final int idx = i;
+      tasks.add(() async {
+        try {
+          final parser = FlutterV2ray.parseFromURL(_serverList[idx]);
+          final delay = await _flutterV2ray
+              .getServerDelay(config: parser.getFullConfiguration())
+              .timeout(const Duration(seconds: 4), onTimeout: () => -1);
+          if (delay > 0 && delay < bestPing) {
+            bestPing = delay;
+            bestIndex = idx;
+          }
+        } catch (_) {}
+      }());
+    }
+
+    await Future.wait(tasks);
+
+    if (bestPing < 99999) {
+      setState(() {
+        _selectedServerIndex = bestIndex;
+        _ping = bestPing;
+        _statusMessage = "بهترین سرور انتخاب شد (پینگ: $bestPing ms)";
+      });
+    } else {
+      setState(() => _statusMessage = "آماده اتصال (${_serverList.length} سرور در لیست)");
     }
   }
 
-  Future<void> _fetchRemoteServers() async {
-    try {
-      final response = await http.get(Uri.parse(remoteServersUrl)).timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
-        _loadConfigsFromInput(response.body);
-      }
-    } catch (_) {}
-  }
-
+  // اتصال هوشمند (اگر سرور انتخابی وصل نشد، خودکار سرورهای بعدی را تست می‌کند)
   Future<void> _toggleVpn() async {
     if (_isConnected) {
       await _flutterV2ray.stopV2Ray();
       _usageTimer?.cancel();
-      setState(() => _isConnected = false);
+      setState(() {
+        _isConnected = false;
+        _statusMessage = "اتصال قطع شد";
+      });
       return;
     }
 
@@ -132,38 +255,65 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
 
     if (_serverList.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("هیچ سروری یافت نشد! از دکمه بالای صفحه کانفیگ وارد کنید.")),
-      );
+      await _fetchDailyFreeServers();
+      if (_serverList.isEmpty) return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _statusMessage = "در حال برقراری اتصال امن...";
+    });
+
+    if (!await _flutterV2ray.requestPermission()) {
+      setState(() {
+        _isConnecting = false;
+        _statusMessage = "مجوز اتصال داده نشد";
+      });
       return;
     }
 
-    setState(() => _isConnecting = true);
+    // تلاش برای اتصال به سرور انتخابی (و در صورت خرابی، تست خودکار تا ۵ سرور بعدی)
+    bool connectedSuccess = false;
+    int attempts = 0;
+    int currentIndex = _selectedServerIndex;
 
-    try {
-      final String activeConfig = _serverList[_selectedServerIndex];
-      final V2RayURL parser = FlutterV2ray.parseFromURL(activeConfig);
-      _ping = await _flutterV2ray.getServerDelay(config: parser.getFullConfiguration());
+    while (attempts < 5 && attempts < _serverList.length) {
+      try {
+        final String activeConfig = _serverList[currentIndex];
+        final V2RayURL parser = FlutterV2ray.parseFromURL(activeConfig);
+        final int delay = await _flutterV2ray
+            .getServerDelay(config: parser.getFullConfiguration())
+            .timeout(const Duration(seconds: 4), onTimeout: () => -1);
 
-      if (await _flutterV2ray.requestPermission()) {
-        await _flutterV2ray.startV2Ray(
-          remark: parser.remark,
-          config: parser.getFullConfiguration(),
-          blockedApps: _iranianAppsBypass,
-        );
-        setState(() {
-          _isConnected = true;
-          _isConnecting = false;
-        });
-        _startCountdown();
-      } else {
-        setState(() => _isConnecting = false);
-      }
-    } catch (e) {
-      setState(() => _isConnecting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطا در اتصال به این سرور! سرور بعدی را از لیست انتخاب کنید.")),
-      );
+        if (delay > 0 || attempts == 4) {
+          _ping = delay > 0 ? delay : 0;
+          await _flutterV2ray.startV2Ray(
+            remark: parser.remark.isNotEmpty ? parser.remark : "Neon VPN Server",
+            config: parser.getFullConfiguration(),
+            blockedApps: _iranianAppsBypass,
+          );
+          setState(() {
+            _selectedServerIndex = currentIndex;
+            _isConnected = true;
+            _isConnecting = false;
+            _statusMessage = "متصل به سرور شماره ${currentIndex + 1}";
+          });
+          _startCountdown();
+          connectedSuccess = true;
+          break;
+        }
+      } catch (_) {}
+
+      attempts++;
+      currentIndex = (currentIndex + 1) % _serverList.length;
+      setState(() => _statusMessage = "تست خودکار سرور جایگزین (${attempts + 1}/5)...");
+    }
+
+    if (!connectedSuccess) {
+      setState(() {
+        _isConnecting = false;
+        _statusMessage = "نیاز به بروزرسانی سرورها (دکمه 🔄 بالا را بزنید)";
+      });
     }
   }
 
@@ -172,28 +322,29 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     _usageTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() => _remainingSeconds--);
+        if (_remainingSeconds % 10 == 0) _saveRemainingTime();
       } else {
         _flutterV2ray.stopV2Ray();
         timer.cancel();
         setState(() => _isConnected = false);
+        _saveRemainingTime();
         _showAdRewardDialog();
       }
     });
   }
 
-  // پنجره افزودن کانفیگ جدید در داخل برنامه
   void _showUpdateConfigDialog() {
     final TextEditingController controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161F30),
-        title: const Text("افزودن کانفیگ یا سابسکریپشن جدید", textAlign: TextAlign.right, style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
+        title: const Text("افزودن کانفیگ یا لینک سابسکریپشن", textAlign: TextAlign.right, style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
         content: TextField(
           controller: controller,
           maxLines: 4,
           decoration: const InputDecoration(
-            hintText: "کد Base64 یا لینک vless / trojan را اینجا پیست کنید...",
+            hintText: "لینک vless / trojan یا کد Base64 را اینجا پیست کنید...",
             border: OutlineInputBorder(),
           ),
         ),
@@ -201,13 +352,21 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("لغو")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                _loadConfigsFromInput(controller.text);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("✅ ${_serverList.length} سرور با موفقیت بارگذاری شد!")),
-                );
+            onPressed: () async {
+              final extracted = _extractValidConfigs(controller.text);
+              if (extracted.isNotEmpty) {
+                setState(() {
+                  _serverList = extracted;
+                  _selectedServerIndex = 0;
+                });
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setStringList('saved_servers', extracted);
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("✅ ${extracted.length} سرور سالم بارگذاری شد!")),
+                  );
+                }
               }
             },
             child: const Text("ذخیره سرورها"),
@@ -217,7 +376,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     );
   }
 
-  // سیستم نمایش تبلیغ و پاداش زمان (+۲ ساعت)
   void _showAdRewardDialog() {
     int adCountdown = 15;
     bool adOpened = false;
@@ -271,6 +429,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             } else {
                               timer.cancel();
                               setState(() => _remainingSeconds += 7200);
+                              _saveRemainingTime();
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -305,6 +464,13 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        leading: IconButton(
+          tooltip: "دریافت خودکار سرورهای جدید روز",
+          icon: _isUpdatingServers
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)))
+              : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
+          onPressed: _isUpdatingServers ? null : () => _fetchDailyFreeServers(silent: false),
+        ),
         title: const Text("NEON VPN", style: TextStyle(letterSpacing: 3, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4))),
         actions: [
           IconButton(
@@ -316,61 +482,71 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // لیست انتخاب سرور (از بین ۵ سرور استخراج‌شده شما)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161F30),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+              // باکس انتخاب سرور و وضعیت بروزرسانی خودکار
+              Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161F30),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.bolt, color: _ping > 0 && _ping < 400 ? Colors.greenAccent : Colors.amber),
-                        const SizedBox(width: 6),
-                        Text(_ping > 0 ? "$_ping ms" : "Auto Ping", style: const TextStyle(color: Colors.white70)),
+                        Row(
+                          children: [
+                            Icon(Icons.bolt, color: _ping > 0 && _ping < 400 ? Colors.greenAccent : Colors.amber),
+                            const SizedBox(width: 4),
+                            Text(_ping > 0 ? "$_ping ms" : "Auto", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                          ],
+                        ),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            dropdownColor: const Color(0xFF161F30),
+                            value: _selectedServerIndex < _serverList.length ? _selectedServerIndex : 0,
+                            items: List.generate(_serverList.length, (index) {
+                              return DropdownMenuItem<int>(
+                                value: index,
+                                child: Text(
+                                  "⚡ سرور هوشمند روزانه #${index + 1}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              );
+                            }),
+                            onChanged: _isConnected
+                                ? null
+                                : (val) {
+                                    if (val != null) {
+                                      setState(() => _selectedServerIndex = val);
+                                    }
+                                  },
+                          ),
+                        ),
                       ],
                     ),
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        dropdownColor: const Color(0xFF161F30),
-                        value: _selectedServerIndex,
-                        items: List.generate(_serverList.length, (index) {
-                          return DropdownMenuItem<int>(
-                            value: index,
-                            child: Text(
-                              "⚡ سرور پرسرعت شماره ${index + 1}",
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                          );
-                        }),
-                        onChanged: _isConnected
-                            ? null
-                            : (val) {
-                                if (val != null) {
-                                  setState(() => _selectedServerIndex = val);
-                                }
-                              },
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _statusMessage,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
 
-              // دکمه مرکزی اتصال
+              // دکمه مرکزی نئونی اتصال
               GestureDetector(
                 onTap: _isConnecting ? null : _toggleVpn,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 400),
-                  width: 190,
-                  height: 190,
+                  width: 185,
+                  height: 185,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF161F30),
@@ -393,12 +569,12 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     children: [
                       Icon(
                         Icons.power_settings_new_rounded,
-                        size: 64,
+                        size: 60,
                         color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        _isConnecting ? "در حال اتصال..." : (_isConnected ? "متصل شد" : "اتصال سریع"),
+                        _isConnecting ? "در حال تست..." : (_isConnected ? "متصل شد" : "اتصال هوشمند"),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -410,9 +586,9 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                 ),
               ),
 
-              // بخش تایمر و دکمه تبلیغات
+              // تایمر اعتبار و دکمه تبلیغات
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF161F30), Color(0xFF1E293B)],
@@ -425,12 +601,12 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     const SizedBox(height: 6),
                     Text(
                       _formatTime(_remainingSeconds),
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white),
+                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 46,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00F5D4),
@@ -446,7 +622,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                 ),
               ),
 
-              // کارت‌های نمایش سرعت لحظه‌ای
+              // نمایش سرعت دانلود و آپلود زنده
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
