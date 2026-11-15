@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
   runApp(const NeonVpnApp());
@@ -38,16 +38,14 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   // ۱. لینک تبلیغاتی اختصاصی شما:
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // ۲. منابع خودکار سرورهای رایگان روزانه (مجهز به CDN ضد فیلتر برای دانلود بدون VPN):
+  // ۲. منابع خودکار سرورهای رایگان روزانه (مجهز به CDN ضد فیلتر):
   final List<String> _autoAggregatorSources = [
     "https://fastly.jsdelivr.net/gh/barry-far/V2ray-Configs@main/Sub1.txt",
     "https://fastly.jsdelivr.net/gh/Epodonios/v2ray-configs@main/All_Configs_Sub.txt",
     "https://fastly.jsdelivr.net/gh/mahdibland/V2RayAggregator@master/sub/sub_merge.txt",
     "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
-    "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/mix",
   ];
 
-  // سرورهای پشتیبان اولیه (در صورتی که کاربر در لحظه اول اینترنت بسیار ضعیفی داشته باشد):
   List<String> _serverList = [
     "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server1",
     "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server2",
@@ -73,7 +71,10 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   int _ping = 0;
   String _statusMessage = "آماده اتصال";
 
-  final List<String> _iranianAppsBypass = [
+  // مستثنی کردن خودِ برنامه (com.neonvpn.app) از تونل VPN
+  // این کار باعث می‌شود تبلیغات داخل برنامه همیشه با آی‌پی واقعی سیم‌کارت باز شوند و خطای Proxy ندهند!
+  final List<String> _bypassApps = [
+    "com.neonvpn.app",
     "ir.divar",
     "cab.snapp.passenger",
     "com.sibche.aspardproject.app",
@@ -91,11 +92,9 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   Future<void> _initApp() async {
     await _flutterV2ray.initializeV2Ray();
     await _loadSavedState();
-    // دریافت خودکار سرورهای جدید روز به محض باز شدن برنامه
     _fetchDailyFreeServers(silent: true);
   }
 
-  // بارگذاری زمان باقی‌مانده و آخرین سرورهای سالم از حافظه گوشی
   Future<void> _loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -112,7 +111,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     await prefs.setInt('remaining_seconds', _remainingSeconds);
   }
 
-  // اعتبارسنجی و استخراج فقط کانفیگ‌های استاندارد و سالم
   List<String> _extractValidConfigs(String rawInput) {
     String decodedText = rawInput.trim();
     if (!decodedText.contains("://")) {
@@ -131,17 +129,15 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           line.startsWith("trojan://") ||
           line.startsWith("ss://")) {
         try {
-          // بررسی اینکه کانفیگ ساختار سالمی برای هسته V2Ray داشته باشد
           FlutterV2ray.parseFromURL(line);
           validConfigs.add(line);
         } catch (_) {}
       }
-      if (validConfigs.length >= 40) break; // گلچین ۴۰ سرور اول برای سرعت بالا
+      if (validConfigs.length >= 40) break;
     }
     return validConfigs;
   }
 
-  // دریافت خودکار سرورهای روزانه از منابع عمومی
   Future<void> _fetchDailyFreeServers({bool silent = false}) async {
     if (_isUpdatingServers) return;
     setState(() {
@@ -157,11 +153,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
           fetchedConfigs = _extractValidConfigs(response.body);
           if (fetchedConfigs.length >= 5) {
-            break; // به محض دریافت لیست سالم از اولین منبع، متوقف شود
+            break;
           }
         }
       } catch (_) {
-        continue; // اگر منبع اول فیلتر یا قطع بود، سراغ منبع بعدی برود
+        continue;
       }
     }
 
@@ -183,21 +179,14 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           ),
         );
       }
-      // تست خودکار پینگ سرورها و انتخاب سریع‌ترین سرور
       await _autoSelectFastestServer();
     } else {
       setState(() => _statusMessage = "استفاده از سرورهای ذخیره شده");
-      if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("خطا در دریافت لیست جدید؛ لطفاً اینترنت خود را بررسی کنید.")),
-        );
-      }
     }
 
     setState(() => _isUpdatingServers = false);
   }
 
-  // تست پینگ خودکار بین سرورهای دریافت شده و انتخاب سریع‌ترین سرور سالم
   Future<void> _autoSelectFastestServer() async {
     if (_serverList.isEmpty || _isConnected) return;
 
@@ -237,7 +226,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
-  // اتصال هوشمند (اگر سرور انتخابی وصل نشد، خودکار سرورهای بعدی را تست می‌کند)
   Future<void> _toggleVpn() async {
     if (_isConnected) {
       await _flutterV2ray.stopV2Ray();
@@ -250,7 +238,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
 
     if (_remainingSeconds <= 0) {
-      _showAdRewardDialog();
+      _openInAppAdScreen();
       return;
     }
 
@@ -272,7 +260,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       return;
     }
 
-    // تلاش برای اتصال به سرور انتخابی (و در صورت خرابی، تست خودکار تا ۵ سرور بعدی)
     bool connectedSuccess = false;
     int attempts = 0;
     int currentIndex = _selectedServerIndex;
@@ -290,7 +277,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           await _flutterV2ray.startV2Ray(
             remark: parser.remark.isNotEmpty ? parser.remark : "Neon VPN Server",
             config: parser.getFullConfiguration(),
-            blockedApps: _iranianAppsBypass,
+            blockedApps: _bypassApps,
           );
           setState(() {
             _selectedServerIndex = currentIndex;
@@ -328,9 +315,57 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         timer.cancel();
         setState(() => _isConnected = false);
         _saveRemainingTime();
-        _showAdRewardDialog();
+        _openInAppAdScreen();
       }
     });
+  }
+
+  // باز کردن صفحه تبلیغ در داخل خود برنامه (بدون رفتن به کروم و بدون خطای Proxy)
+  Future<void> _openInAppAdScreen() async {
+    // اگر فیلترشکن روشن است، موقتاً قطع می‌شود تا تبلیغ با آی‌پی واقعی سیم‌کارت باز شود
+    bool wasConnected = _isConnected;
+    if (wasConnected) {
+      await _flutterV2ray.stopV2Ray();
+      _usageTimer?.cancel();
+      setState(() {
+        _isConnected = false;
+        _statusMessage = "توقف موقت برای بارگذاری تبلیغ بدون خطای پراکسی...";
+      });
+    }
+
+    if (!mounted) return;
+
+    final bool? rewarded = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => InAppAdScreen(adUrl: adDirectLink),
+      ),
+    );
+
+    if (rewarded == true) {
+      setState(() {
+        _remainingSeconds += 7200; // افزودن ۲ ساعت واقعی فقط در صورت تماشای کامل
+        _statusMessage = "۲ ساعت زمان رایگان اضافه شد!";
+      });
+      await _saveRemainingTime();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text("🎉 تبریک! ۲ ساعت به زمان اتصال شما اضافه شد."),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text("⚠️ تبلیغ را کامل مشاهده نکردید؛ زمانی اضافه نشد."),
+          ),
+        );
+      }
+    }
   }
 
   void _showUpdateConfigDialog() {
@@ -339,7 +374,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161F30),
-        title: const Text("افزودن کانفیگ یا لینک سابسکریپشن", textAlign: TextAlign.right, style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
+        title: const Text("افزودن کانفیگ دستی", textAlign: TextAlign.right, style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
         content: TextField(
           controller: controller,
           maxLines: 4,
@@ -373,80 +408,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  void _showAdRewardDialog() {
-    int adCountdown = 15;
-    bool adOpened = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF161F30),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text("🎁 دریافت ۲ ساعت اینترنت آزاد", textAlign: TextAlign.right, style: TextStyle(fontSize: 18, color: Color(0xFF00F5D4))),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "برای تأمین هزینه سرورهای پرسرعت، روی دکمه زیر بزنید، صفحه اسپانسر را ۱۵ ثانیه مشاهده کنید و ۲ ساعت زمان رایگان بگیرید.",
-                    textAlign: TextAlign.right,
-                    style: TextStyle(color: Colors.white70, height: 1.5),
-                  ),
-                  const SizedBox(height: 20),
-                  if (adOpened)
-                    Text(
-                      adCountdown > 0 ? "لطفاً $adCountdown ثانیه صبر کنید..." : "✅ زمان شما اضافه شد!",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber),
-                    ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("بستن", style: TextStyle(color: Colors.grey)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00F5D4),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: adOpened
-                      ? null
-                      : () async {
-                          setModalState(() => adOpened = true);
-                          await launchUrl(Uri.parse(adDirectLink), mode: LaunchMode.externalApplication);
-
-                          Timer.periodic(const Duration(seconds: 1), (timer) {
-                            if (adCountdown > 1) {
-                              setModalState(() => adCountdown--);
-                            } else {
-                              timer.cancel();
-                              setState(() => _remainingSeconds += 7200);
-                              _saveRemainingTime();
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  backgroundColor: Colors.green,
-                                  content: Text("🎉 ۲ ساعت به زمان اتصال شما اضافه شد!"),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                  child: const Text("مشاهده تبلیغ (+۲ ساعت)", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            );
-          },
-        );
-      },
     );
   }
 
@@ -486,7 +447,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // باکس انتخاب سرور و وضعیت بروزرسانی خودکار
               Column(
                 children: [
                   Container(
@@ -539,8 +499,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ),
                 ],
               ),
-
-              // دکمه مرکزی نئونی اتصال
               GestureDetector(
                 onTap: _isConnecting ? null : _toggleVpn,
                 child: AnimatedContainer(
@@ -585,8 +543,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ),
                 ),
               ),
-
-              // تایمر اعتبار و دکمه تبلیغات
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -613,7 +569,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                           foregroundColor: Colors.black,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                        onPressed: _showAdRewardDialog,
+                        onPressed: _openInAppAdScreen,
                         icon: const Icon(Icons.play_circle_fill_rounded),
                         label: const Text("افزایش زمان رایگان (+۲ ساعت)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       ),
@@ -621,8 +577,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ],
                 ),
               ),
-
-              // نمایش سرعت دانلود و آپلود زنده
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -657,6 +611,197 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// صفحه نمایش تبلیغ درون‌برنامه‌ای (In-App WebView) با تایمر ضد تقلب
+// ============================================================================
+class InAppAdScreen extends StatefulWidget {
+  final String adUrl;
+  const InAppAdScreen({super.key, required this.adUrl});
+
+  @override
+  State<InAppAdScreen> createState() => _InAppAdScreenState();
+}
+
+class _InAppAdScreenState extends State<InAppAdScreen> {
+  late final WebViewController _controller;
+  int _secondsLeft = 15;
+  bool _adLoaded = false;
+  bool _timerStarted = false;
+  bool _hasProxyError = false;
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF0B0F19))
+      // تنظیم User-Agent استاندارد موبایل برای جلوگیری از مسدود شدن توسط شبکه تبلیغاتی
+      ..setUserAgent("Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) async {
+            // بررسی اینکه آیا صفحه خطای Anonymous Proxy داده است یا خیر
+            try {
+              final Object result = await _controller.runJavaScriptReturningResult("document.body.innerText");
+              final String bodyText = result.toString();
+              if (bodyText.contains("Anonymous Proxy")) {
+                setState(() {
+                  _hasProxyError = true;
+                  _adLoaded = false;
+                });
+                _countdownTimer?.cancel();
+                return;
+              }
+            } catch (_) {}
+
+            if (!_timerStarted) {
+              setState(() {
+                _adLoaded = true;
+                _hasProxyError = false;
+                _timerStarted = true;
+              });
+              _startAdTimer();
+            }
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.adUrl));
+  }
+
+  void _startAdTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsLeft > 1) {
+        setState(() => _secondsLeft--);
+      } else {
+        timer.cancel();
+        setState(() => _secondsLeft = 0);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<bool> _handleBackPress() async {
+    if (_secondsLeft == 0) {
+      Navigator.pop(context, true);
+      return false;
+    }
+
+    final bool? shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF161F30),
+        title: const Text("⚠️ لغو دریافت زمان رایگان؟", textAlign: TextAlign.right, style: TextStyle(color: Colors.amber, fontSize: 17)),
+        content: Text(
+          "هنوز $_secondsLeft ثانیه از تماشای تبلیغ باقی مانده است. اگر الان خارج شوید، ۲ ساعت زمان رایگان دریافت نمی‌کنید.",
+          textAlign: TextAlign.right,
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("خروج بدون جایزه", style: TextStyle(color: Colors.redAccent)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("ادامه تماشای تبلیغ"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLeave == true && mounted) {
+      Navigator.pop(context, false);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _handleBackPress,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF161F30),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: _handleBackPress,
+          ),
+          title: Text(
+            _hasProxyError
+                ? "⚠️ فیلترشکن دیگر گوشی را خاموش کنید"
+                : (!_adLoaded
+                    ? "⏳ در حال بارگذاری تبلیغ..."
+                    : (_secondsLeft > 0 ? "⏱ $_secondsLeft ثانیه در این صفحه بمانید" : "✅ جایزه آماده دریافت است!")),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            if (_secondsLeft == 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("دریافت +۲ ساعت", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(4),
+            child: LinearProgressIndicator(
+              value: _adLoaded ? (15 - _secondsLeft) / 15 : null,
+              backgroundColor: Colors.white12,
+              color: const Color(0xFF00F5D4),
+            ),
+          ),
+        ),
+        body: _hasProxyError
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.vpn_lock_rounded, size: 64, color: Colors.amber),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "خطای تشخیص فیلترشکن (Anonymous Proxy)",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "شبکه تبلیغاتی اجازه نمایش تبلیغ با آی‌پی فیلترشکن را نمی‌دهد. لطفاً اگر فیلترشکن دیگری روی گوشی شما روشن است آن را خاموش کنید و دکمه تلاش مجدد را بزنید.",
+                        style: TextStyle(color: Colors.white70, height: 1.5),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
+                        onPressed: () {
+                          setState(() => _hasProxyError = false);
+                          _controller.reload();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text("تلاش مجدد با اینترنت عادی"),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : WebViewWidget(controller: _controller),
       ),
     );
   }
