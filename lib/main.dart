@@ -38,22 +38,28 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   // ۱. لینک تبلیغاتی اختصاصی شما:
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // ۲. سرورهای اصلی و پرسرعت (همیشه در بالای لیست ثابت می‌مانند و پاک نمی‌شوند):
-  final List<String> _coreFastServers = [
-    "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server1",
-    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server2",
-    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_6i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server3",
-    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_10i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server4",
-    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_8i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#Server5",
+  // ۲. لینک‌های مستقیم و ضد فیلتر فایل servers.txt گیت‌هاب شما (frankalayari2-cmd):
+  final List<String> myAdminServerUrls = [
+    "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/refs/heads/main/servers.txt",
+    "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
+    "https://fastly.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
+    "https://gcore.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
   ];
 
-  // ۳. منابع خودکار مخصوص ایران (فقط سرورهای ضد فیلتر Reality و CDN از آن‌ها استخراج می‌شود):
+  // ۳. سرورهای پشتیبان اولیه (برای زمان نصب اولیه در صورت قطعی کامل اینترنت):
+  final List<String> _fallbackFastServers = [
+    "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-1",
+    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-2",
+    "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_6i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-3",
+  ];
+
+  // ۴. منابع خودکار کمکی روزانه (در کنار سرورهای اختصاصی شما):
   final List<String> _iranOptimizedSources = [
     "https://fastly.jsdelivr.net/gh/yebekhe/TVC@main/subscriptions/xray/normal/reality",
-    "https://fastly.jsdelivr.net/gh/yebekhe/TVC@main/subscriptions/xray/normal/mix",
     "https://fastly.jsdelivr.net/gh/barry-far/V2ray-Configs@main/Sub1.txt",
   ];
 
+  List<String> _adminServers = [];
   List<String> _serverList = [];
   int _selectedServerIndex = 0;
 
@@ -87,26 +93,28 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _serverList = List.from(_coreFastServers);
+    _adminServers = List.from(_fallbackFastServers);
+    _serverList = List.from(_fallbackFastServers);
     _initApp();
   }
 
   Future<void> _initApp() async {
     await _flutterV2ray.initializeV2Ray();
     await _loadSavedState();
-    _fetchExtraServersInBackground(silent: true);
+    _syncAllServers(silent: true);
   }
 
   Future<void> _loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _remainingSeconds = prefs.getInt('remaining_seconds') ?? 3600;
-      // استفاده از کلید جدید v3 برای پاک شدن سرورهای ضعیف قبلی از حافظه گوشی
-      final savedServers = prefs.getStringList('saved_servers_v3');
-      if (savedServers != null && savedServers.isNotEmpty) {
-        _serverList = savedServers;
-      } else {
-        _serverList = List.from(_coreFastServers);
+      final savedAdmin = prefs.getStringList('admin_servers_v5');
+      final savedAll = prefs.getStringList('all_servers_v5');
+      if (savedAdmin != null && savedAdmin.isNotEmpty) {
+        _adminServers = savedAdmin;
+      }
+      if (savedAll != null && savedAll.isNotEmpty) {
+        _serverList = savedAll;
       }
     });
   }
@@ -116,8 +124,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     await prefs.setInt('remaining_seconds', _remainingSeconds);
   }
 
-  // استخراج فقط سرورهای قوی مخصوص ایران (Reality و TLS-WS)
-  List<String> _extractStrongIranConfigs(String rawInput, {bool allowAll = false}) {
+  List<String> _extractConfigs(String rawInput, {bool filterForAuto = false}) {
     String decodedText = rawInput.trim();
     if (!decodedText.contains("://")) {
       try {
@@ -130,79 +137,105 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     final List<String> validConfigs = [];
 
     for (final line in lines) {
-      if (line.startsWith("vless://") || line.startsWith("trojan://") || (allowAll && line.startsWith("vmess://"))) {
-        // در حالت خودکار فقط سرورهای ضد فیلتر Reality یا CDN WebSocket را قبول کن
-        final bool isStrongProtocol = allowAll ||
+      if (line.startsWith("vless://") ||
+          line.startsWith("trojan://") ||
+          line.startsWith("vmess://") ||
+          line.startsWith("ss://")) {
+        final bool passesFilter = !filterForAuto ||
             line.contains("security=reality") ||
             line.contains("type=ws") ||
             line.contains("type=grpc");
 
-        if (isStrongProtocol) {
+        if (passesFilter) {
           try {
             FlutterV2ray.parseFromURL(line);
             validConfigs.add(line);
           } catch (_) {}
         }
       }
-      if (validConfigs.length >= 20) break;
+      if (validConfigs.length >= 30) break;
     }
     return validConfigs;
   }
 
-  // دریافت سرورهای کمکی روزانه و قرار دادن آن‌ها بعد از ۵ سرور اصلی
-  Future<void> _fetchExtraServersInBackground({bool silent = false}) async {
+  // دریافت آنی سرورهای فایل servers.txt شما + سرورهای کمکی روزانه
+  Future<void> _syncAllServers({bool silent = false}) async {
     if (_isUpdatingServers) return;
     setState(() {
       _isUpdatingServers = true;
-      if (!silent) _statusMessage = "در حال دریافت سرورهای ضد فیلتر جدید...";
+      if (!silent) _statusMessage = "در حال دریافت سرورهای جدید از گیت‌هاب شما...";
     });
 
-    List<String> extraConfigs = [];
+    final int timestamp = DateTime.now().millisecondsSinceEpoch;
+    List<String> fetchedAdminServers = [];
 
-    for (final url in _iranOptimizedSources) {
+    // ۱. تلاش برای دریافت فایل servers.txt شما از لینک اصلی و آینه‌های CDN
+    for (final baseUrl in myAdminServerUrls) {
       try {
-        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+        final response = await http.get(
+          Uri.parse("$baseUrl?t=$timestamp"),
+          headers: {"Cache-Control": "no-cache"},
+        ).timeout(const Duration(seconds: 5));
+
         if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
-          final extracted = _extractStrongIranConfigs(response.body);
-          extraConfigs.addAll(extracted);
-          if (extraConfigs.length >= 15) break;
+          fetchedAdminServers = _extractConfigs(response.body, filterForAuto: false);
+          if (fetchedAdminServers.isNotEmpty) break;
         }
       } catch (_) {
         continue;
       }
     }
 
-    // همیشه ۵ سرور اصلی شما در صدر لیست (شماره ۱ تا ۵) باقی می‌مانند
-    final List<String> combinedList = [
-      ..._coreFastServers,
-      ...extraConfigs.take(15),
+    if (fetchedAdminServers.isNotEmpty) {
+      _adminServers = fetchedAdminServers;
+    } else if (_adminServers.isEmpty) {
+      _adminServers = List.from(_fallbackFastServers);
+    }
+
+    // ۲. دریافت سرورهای کمکی روزانه
+    List<String> extraAutoServers = [];
+    for (final url in _iranOptimizedSources) {
+      try {
+        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
+          extraAutoServers.addAll(_extractConfigs(response.body, filterForAuto: true));
+          if (extraAutoServers.length >= 12) break;
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    final List<String> combined = [
+      ..._adminServers,
+      ...extraAutoServers.take(12),
     ];
 
     setState(() {
-      _serverList = combinedList;
+      _serverList = combined;
       if (_selectedServerIndex >= _serverList.length) {
         _selectedServerIndex = 0;
       }
       _isUpdatingServers = false;
-      if (!silent) {
-        _statusMessage = "✅ لیست سرورها بروزرسانی شد (${_serverList.length} سرور آماده)";
-      }
+      _statusMessage = fetchedAdminServers.isNotEmpty
+          ? "✅ ${fetchedAdminServers.length} سرور اختصاصی شما + سرورهای روزانه آپدیت شد"
+          : "✅ لیست سرورها بروزرسانی شد (${_serverList.length} سرور آماده)";
     });
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('saved_servers_v3', combinedList);
+    await prefs.setStringList('admin_servers_v5', _adminServers);
+    await prefs.setStringList('all_servers_v5', _serverList);
 
     if (!silent && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.green.shade700,
-          content: Text("✅ ${_serverList.length} سرور پرسرعت آماده اتصال است!"),
+          content: Text("🚀 ${ _adminServers.length} سرور ویژه از فایل servers.txt شما دریافت شد!"),
         ),
       );
     }
   }
 
-  // اتصال فوری و بدون معطلی (دقیقاً مثل نسخه اول)
   Future<void> _toggleVpn() async {
     if (_isConnected) {
       await _flutterV2ray.stopV2Ray();
@@ -220,7 +253,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
 
     if (_serverList.isEmpty) {
-      _serverList = List.from(_coreFastServers);
+      _serverList = List.from(_fallbackFastServers);
     }
 
     setState(() {
@@ -246,7 +279,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         });
         _startCountdown();
 
-        // گرفتن پینگ در پس‌زمینه (بدون اینکه مانع اتصال شود)
         _flutterV2ray
             .getServerDelay(config: parser.getFullConfiguration())
             .timeout(const Duration(seconds: 4), onTimeout: () => 0)
@@ -269,7 +301,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
-  // تعویض فوری به سرور بعدی در ۱ ثانیه
   Future<void> _switchToNextWorkingServer() async {
     if (_serverList.isEmpty || _isConnecting) return;
 
@@ -355,7 +386,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161F30),
-        title: const Text("افزودن کانفیگ دستی یا ریست سرورها", textAlign: TextAlign.right, style: TextStyle(fontSize: 15, color: Color(0xFF00F5D4))),
+        title: const Text("افزودن کانفیگ دستی", textAlign: TextAlign.right, style: TextStyle(fontSize: 15, color: Color(0xFF00F5D4))),
         content: TextField(
           controller: controller,
           maxLines: 4,
@@ -366,37 +397,20 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () async {
-              setState(() {
-                _serverList = List.from(_coreFastServers);
-                _selectedServerIndex = 0;
-                _statusMessage = "بازگشت به ۵ سرور اصلی پرسرعت";
-              });
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setStringList('saved_servers_v3', _serverList);
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text("ریست به ۵ سرور اصلی", style: TextStyle(color: Colors.amber)),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("بستن", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
             onPressed: () async {
-              final extracted = _extractStrongIranConfigs(controller.text, allowAll: true);
+              final extracted = _extractConfigs(controller.text, filterForAuto: false);
               if (extracted.isNotEmpty) {
                 setState(() {
-                  // قرار دادن سرورهای جدید کاربر در اولویت اول لیست
-                  _serverList = [...extracted, ..._coreFastServers];
+                  _serverList = [...extracted, ..._serverList];
                   _selectedServerIndex = 0;
-                  _statusMessage = "${extracted.length} سرور اختصاصی شما در صدر لیست قرار گرفت";
+                  _statusMessage = "${extracted.length} سرور دستی در صدر لیست قرار گرفت";
                 });
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setStringList('saved_servers_v3', _serverList);
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("✅ ${extracted.length} سرور جدید اضافه شد!")),
-                  );
-                }
+                if (mounted) Navigator.pop(context);
               }
             },
             child: const Text("افزودن به صدر لیست"),
@@ -421,16 +435,16 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          tooltip: "دریافت سرورهای کمکی روزانه",
+          tooltip: "دریافت آخرین سرورها از فایل servers.txt شما",
           icon: _isUpdatingServers
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)))
               : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
-          onPressed: _isUpdatingServers ? null : () => _fetchExtraServersInBackground(silent: false),
+          onPressed: _isUpdatingServers ? null : () => _syncAllServers(silent: false),
         ),
         title: const Text("NEON VPN", style: TextStyle(letterSpacing: 3, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4))),
         actions: [
           IconButton(
-            tooltip: "افزودن کانفیگ یا ریست به سرورهای اصلی",
+            tooltip: "افزودن کانفیگ دستی",
             icon: const Icon(Icons.paste_rounded, color: Color(0xFF00F5D4)),
             onPressed: _showUpdateConfigDialog,
           ),
@@ -466,17 +480,17 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             dropdownColor: const Color(0xFF161F30),
                             value: _selectedServerIndex < _serverList.length ? _selectedServerIndex : 0,
                             items: List.generate(_serverList.length, (index) {
-                              final bool isCore = index < _coreFastServers.length;
+                              final bool isAdminServer = index < _adminServers.length;
                               return DropdownMenuItem<int>(
                                 value: index,
                                 child: Text(
-                                  isCore
-                                      ? "🌟 سرور ویژه پرسرعت #${index + 1}"
+                                  isAdminServer
+                                      ? "👑 سرور ویژه مدیریت #${index + 1}"
                                       : "⚡ سرور اتوماتیک روزانه #${index + 1}",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
-                                    color: isCore ? const Color(0xFF00F5D4) : Colors.white,
+                                    color: isAdminServer ? const Color(0xFF00F5D4) : Colors.white,
                                   ),
                                 ),
                               );
@@ -504,7 +518,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ),
                 ],
               ),
-
               Column(
                 children: [
                   GestureDetector(
@@ -565,7 +578,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ),
                 ],
               ),
-
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -600,7 +612,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   ],
                 ),
               ),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
