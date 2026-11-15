@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Neon VPN" />
+  <title>Neon VPN - iOS Edition</title>
+  <style>
+    :root {
+      --bg-dark: #070A12;
+      --card-bg: #0E1422;
+      --header-top: #141E33;
+      --header-bottom: #0B101D;
+      --neon-cyan: #00F5D4;
+      --neon-blue: #00BBF9;
+      --neon-purple: #9B5DE5;
+      --neon-amber: #FFBE0B;
+      --bar-off: #1B2438;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 12px;
+      overflow-x: hidden;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 400px;
+      min-height: 92vh;
+      background-color: var(--card-bg);
+      border-radius: 32px;
+      border: 1.5px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s ease;
+    }
+
+    .app-shell.connected {
+      border-color: rgba(0, 245, 212, 0.45);
+      box-shadow: 0 0 30px rgba(0, 245, 212, 0.15);
+    }
+
+    /* Curved Top Header */
+    .header-stack {
+      position: relative;
+      margin-bottom: 78px;
+    }
+
+    .curved-header {
+      width: 100%;
+      height: 245px;
+      background: linear-gradient(135deg, var(--header-top), var(--header-bottom));
+      border-bottom-left-radius: 48px;
+      border-bottom-right-radius: 48px;
+      border-bottom: 2px solid #1E293B;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: border-color 0.4s ease;
+    }
+
+    .app-shell.connected .curved-header {
+      border-bottom-color: var(--neon-cyan);
+    }
+
+    .top-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1.4px solid rgba(255, 255, 255, 0.35);
+      background: transparent;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .sync-btn {
+      border-color: rgba(0, 245, 212, 0.4);
+      color: var(--neon-cyan);
+    }
+
+    .logo-circle {
+      margin-top: 6px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background-color: var(--card-bg);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 32px;
+      box-shadow: 0 0 20px rgba(155, 93, 229, 0.3);
+      transition: box-shadow 0.4s ease;
+    }
+
+    .app-shell.connected .logo-circle {
+      box-shadow: 0 0 25px rgba(0, 245, 212, 0.6);
+    }
+
+    .brand-title {
+      margin-top: 8px;
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-blue), var(--neon-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Central Button + Parallel Side Neon Tubes */
+    .center-button-wrapper {
+      position: absolute;
+      bottom: -74px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .parallel-side {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .parallel-side.left {
+      align-items: flex-end;
+    }
+
+    .parallel-side.right {
+      align-items: flex-start;
+    }
+
+    .neon-bar {
+      height: 4.5px;
+      border-radius: 6px;
+      background-color: var(--bar-off);
+      transition: all 0.35s ease;
+    }
+
+    .w-1 { width: 26px; }
+    .w-2 { width: 42px; }
+    .w-3 { width: 58px; }
+
+    .app-shell.connecting .neon-bar {
+      background-color: var(--neon-amber);
+      box-shadow: 0 0 10px var(--neon-amber);
+    }
+
+    .app-shell.connected .neon-bar.cyan {
+      background-color: var(--neon-cyan);
+      box-shadow: 0 0 12px var(--neon-cyan), 0 0 20px var(--neon-cyan);
+    }
+
+    .app-shell.connected .neon-bar.blue {
+      background-color: var(--neon-blue);
+      box-shadow: 0 0 12px var(--neon-blue), 0 0 20px var(--neon-blue);
+    }
+
+    .power-btn {
+      width: 154px;
+      height: 154px;
+      border-radius: 50%;
+      background-color: #0B0F19;
+      border: 5px solid #26334D;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.35s ease;
+    }
+
+    .app-shell.connecting .power-btn {
+      border-color: var(--neon-amber);
+      box-shadow: 0 0 30px rgba(255, 190, 11, 0.45);
+    }
+
+    .app-shell.connected .power-btn {
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 35px rgba(0, 245, 212, 0.65);
+    }
+
+    .bolt-icon {
+      font-size: 54px;
+      color: rgba(255, 255, 255, 0.75);
+      line-height: 1;
+      transition: color 0.35s ease;
+    }
+
+    .app-shell.connected .bolt-icon {
+      color: var(--neon-cyan);
+      text-shadow: 0 0 15px var(--neon-cyan);
+    }
+
+    .power-label {
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      color: #ffffff;
+    }
+
+    .app-shell.connected .power-label {
+      color: var(--neon-cyan);
+    }
+
+    /* Horizontal Parallel Neon Lines */
+    .horizontal-lines {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      margin: 8px 0;
+    }
+
+    .h-line {
+      height: 3px;
+      border-radius: 4px;
+      background-color: #1A2235;
+      transition: all 0.4s ease;
+    }
+
+    .hl-1 { width: 72%; }
+    .hl-2 { width: 52%; }
+    .hl-3 { width: 34%; }
+
+    .app-shell.connected .hl-1,
+    .app-shell.connected .hl-3 {
+      background-color: var(--neon-cyan);
+      box-shadow: 0 0 10px var(--neon-cyan);
+    }
+
+    .app-shell.connected .hl-2 {
+      background-color: var(--neon-purple);
+      box-shadow: 0 0 10px var(--neon-purple);
+    }
+
+    /* Status Block */
+    .status-box {
+      text-align: center;
+      padding: 0 16px;
+    }
+
+    .status-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .app-shell.connected .status-title {
+      color: var(--neon-cyan);
+    }
+
+    .status-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    /* iOS Quick Connect Actions (Shown when connected) */
+    .ios-actions {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 22px;
+    }
+
+    .app-shell.connected .ios-actions {
+      display: flex;
+    }
+
+    .ios-action-btn {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(0, 245, 212, 0.45);
+      background: rgba(0, 245, 212, 0.1);
+      color: var(--neon-cyan);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      text-decoration: none;
+    }
+
+    /* Server Selector Row */
+    .server-selector {
+      margin: 0 22px;
+      padding: 12px 16px;
+      background-color: #141D30;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .server-selector select {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .server-selector select option {
+      background-color: #101726;
+      color: #fff;
+    }
+
+    /* Timer & Ad Reward Card */
+    .reward-card {
+      margin: 0 22px 18px 22px;
+      padding: 12px 16px;
+      background-color: #131B2E;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .timer-label {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.55);
+      letter-spacing: 1px;
+    }
+
+    .timer-value {
+      font-size: 20px;
+      font-weight: 800;
+      margin-top: 2px;
+    }
+
+    .ad-btn {
+      background-color: var(--neon-cyan);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Side Drawer Menu */
+    .drawer-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: none;
+      z-index: 20;
+    }
+
+    .drawer-overlay.open {
+      display: block;
+    }
+
+    .drawer {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -290px;
+      width: 275px;
+      background-color: var(--card-bg);
+      border-top-right-radius: 32px;
+      border-bottom-right-radius: 32px;
+      z-index: 30;
+      transition: left 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drawer.open {
+      left: 0;
+    }
+
+    .drawer-header {
+      padding: 40px 20px 28px 20px;
+      background: linear-gradient(135deg, #18243E, #0B101D);
+      border-bottom-left-radius: 36px;
+      border-bottom-right-radius: 36px;
+      border-bottom: 1.5px solid var(--neon-cyan);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .drawer-list {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .drawer-item {
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .drawer-item span.icon {
+      color: var(--neon-cyan);
+      font-size: 18px;
+    }
+
+    /* Fullscreen Ad Modal */
+    .ad-modal {
+      position: fixed;
+      inset: 0;
+      background-color: #0B0F19;
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+    }
+
+    .ad-modal.active {
+      display: flex;
+    }
+
+    .ad-topbar {
+      background-color: #161F30;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--neon-cyan);
+    }
+
+    .ad-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell" id="appShell">
+    <!-- Side Drawer Overlay -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+    <div class="drawer" id="drawer">
+      <div class="drawer-header">
+        <div class="logo-circle">🛡️</div>
+        <div class="brand-title">Neon VPN</div>
+      </div>
+      <div class="drawer-list">
+        <div class="drawer-item" onclick="toggleDrawer(false)">
+          <span class="icon">🏠</span> Home
+        </div>
+        <div class="drawer-item" onclick="showAlert('Privacy Policy', 'Neon VPN strictly follows a zero-log policy. Your traffic is encrypted end-to-end via Xray/VLESS nodes.')">
+          <span class="icon">🛡️</span> Privacy Policy
+        </div>
+        <div class="drawer-item" onclick="shareApp()">
+          <span class="icon">📤</span> Share To Friends
+        </div>
+        <div class="drawer-item" onclick="showAlert('Install on iPhone (iOS)', '1. Tap the Share button in Safari.\n2. Select Add to Home Screen.\n3. Install V2Box or Streisand from the App Store for 1-Tap tunnel activation.')">
+          <span class="icon">📱</span> Add to iPhone Home
+        </div>
+        <div class="drawer-item" onclick="showAlert('About Us', 'Neon VPN v2.0 (iOS & Global Web Edition)\nPowered by Cloudflare Edge & Xray.')">
+          <span class="icon">👤</span> About Us
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Curved Header + Button -->
+    <div class="header-stack">
+      <div class="curved-header">
+        <div class="top-bar">
+          <button class="icon-btn" onclick="toggleDrawer(true)">⊞</button>
+          <button class="icon-btn sync-btn" onclick="syncServers()">↻</button>
+        </div>
+        <div class="logo-circle">🛡️</div>
+        <div class="brand-title">Neon VPN</div>
+      </div>
+
+      <div class="center-button-wrapper">
+        <div class="parallel-side left">
+          <div class="neon-bar w-1 cyan"></div>
+          <div class="neon-bar w-2 blue"></div>
+          <div class="neon-bar w-3 cyan"></div>
+          <div class="neon-bar w-2 blue"></div>
+          <div class="neon-bar w-1 cyan"></div>
+        </div>
+
+        <div class="power-btn" onclick="toggleConnection()">
+          <div class="bolt-icon">⚡</div>
+          <div class="power-label" id="powerLabel">LET'S GO</div>
+        </div>
+
+        <div class="parallel-side right">
+          <div class="neon-bar w-1 cyan"></div>
+          <div class="neon-bar w-2 blue"></div>
+          <div class="neon-bar w-3 cyan"></div>
+          <div class="neon-bar w-2 blue"></div>
+          <div class="neon-bar w-1 cyan"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Horizontal Parallel Neon Lines -->
+    <div class="horizontal-lines">
+      <div class="h-line hl-1"></div>
+      <div class="h-line hl-2"></div>
+      <div class="h-line hl-3"></div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="status-box">
+      <div class="status-title" id="statusTitle">Not Connected</div>
+      <div class="status-sub" id="statusSub">Syncing cloud servers...</div>
+    </div>
+
+    <!-- iOS 1-Tap Launchers (Visible when connected) -->
+    <div class="ios-actions">
+      <a class="ios-action-btn" id="v2boxLink" href="#">
+        <span>🚀 Open in V2Box (iOS 1-Tap)</span>
+        <span>➔</span>
+      </a>
+      <a class="ios-action-btn" id="streisandLink" href="#">
+        <span>⚡ Open in Streisand (iOS)</span>
+        <span>➔</span>
+      </a>
+      <button class="ios-action-btn" onclick="copyActiveConfig()">
+        <span>📋 Copy Active Server Config</span>
+        <span>Copy</span>
+      </button>
+    </div>
+
+    <!-- Connect To Server Selector -->
+    <div class="server-selector">
+      <span>🏳️</span>
+      <select id="serverSelect" onchange="onServerChange()">
+        <option value="0">Connect To Server (#1)</option>
+      </select>
+      <span>⌄</span>
+    </div>
+
+    <!-- Free Session Timer + Ad Reward -->
+    <div class="reward-card">
+      <div>
+        <div class="timer-label">FREE SESSION TIME</div>
+        <div class="timer-value" id="timerDisplay">01:00:00</div>
+      </div>
+      <button class="ad-btn" onclick="startSponsorAd()">
+        ▶ Add +2 Hours
+      </button>
+    </div>
+  </div>
+
+  <!-- In-App Sponsor Ad Modal -->
+  <div class="ad-modal" id="adModal">
+    <div class="ad-topbar">
+      <span id="adTimerText" style="font-size:14px; font-weight:700;">⏳ Wait 15 seconds...</span>
+      <button class="ad-btn" id="claimBtn" style="display:none;" onclick="claimReward()">Claim +2 Hours</button>
+      <button class="icon-btn" id="closeAdBtn" onclick="closeAdEarly()" style="width:32px; height:32px;">✕</button>
+    </div>
+    <iframe class="ad-frame" id="adFrame" src="about:blank"></iframe>
+  </div>
+
+  <script>
+    const AD_DIRECT_LINK = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
+    const SUB_RAW_URL = "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt";
+    const SERVER_SOURCES = [
+      "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
+      "https://gcore.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
+      "https://fastly.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt"
+    ];
+
+    let servers = [];
+    let isConnected = false;
+    let remainingSeconds = parseInt(localStorage.getItem("neon_ios_seconds") || "3600", 10);
+    let sessionInterval = null;
+    let adInterval = null;
+
+    function formatTime(sec) {
+      const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+      const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+      const s = String(sec % 60).padStart(2, "0");
+      return `${h}:${m}:${s}`;
+    }
+
+    function updateTimerUI() {
+      document.getElementById("timerDisplay").innerText = formatTime(remainingSeconds);
+      localStorage.setItem("neon_ios_seconds", remainingSeconds);
+    }
+
+    async function syncServers() {
+      document.getElementById("statusSub").innerText = "Syncing cloud servers...";
+      const ts = Date.now();
+
+      for (const url of SERVER_SOURCES) {
+        try {
+          const res = await fetch(`${url}?nocache=${ts}`, { cache: "no-store" });
+          if (res.ok) {
+            const text = await res.text();
+            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l =>
+              l.startsWith("vless://") || l.startsWith("trojan://") || l.startsWith("vmess://") || l.startsWith("ss://")
+            );
+            if (lines.length > 0) {
+              servers = lines;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+
+      const select = document.getElementById("serverSelect");
+      select.innerHTML = "";
+      servers.forEach((_, idx) => {
+        const opt = document.createElement("option");
+        opt.value = idx;
+        opt.innerText = `Connect To Server (#${idx + 1})`;
+        select.appendChild(opt);
+      });
+
+      document.getElementById("statusSub").innerText = servers.length > 0
+        ? `${servers.length} High-Speed iOS Nodes Ready`
+        : "Tap sync icon to reload servers";
+    }
+
+    function updateDeepLinks() {
+      if (servers.length === 0) return;
+      const idx = parseInt(document.getElementById("serverSelect").value || "0", 10);
+      const activeCfg = servers[idx] || servers[0];
+
+      document.getElementById("v2boxLink").href = `v2box://install-sub?url=${encodeURIComponent(SUB_RAW_URL)}&name=NeonVPN`;
+      document.getElementById("streisandLink").href = `streisand://import/${activeCfg}`;
+    }
+
+    function onServerChange() {
+      updateDeepLinks();
+      if (isConnected) {
+        const idx = parseInt(document.getElementById("serverSelect").value || "0", 10);
+        document.getElementById("statusSub").innerText = `Active Node #${idx + 1} Ready`;
+      }
+    }
+
+    function toggleConnection() {
+      const shell = document.getElementById("appShell");
+
+      if (isConnected) {
+        isConnected = false;
+        clearInterval(sessionInterval);
+        shell.classList.remove("connected", "connecting");
+        document.getElementById("powerLabel").innerText = "LET'S GO";
+        document.getElementById("statusTitle").innerText = "Not Connected";
+        document.getElementById("statusSub").innerText = "Disconnected";
+        return;
+      }
+
+      if (remainingSeconds <= 0) {
+        startSponsorAd();
+        return;
+      }
+
+      shell.classList.add("connecting");
+      document.getElementById("powerLabel").innerText = "WAIT...";
+      document.getElementById("statusTitle").innerText = "Connecting...";
+
+      setTimeout(() => {
+        shell.classList.remove("connecting");
+        shell.classList.add("connected");
+        isConnected = true;
+        updateDeepLinks();
+
+        const idx = parseInt(document.getElementById("serverSelect").value || "0", 10);
+        document.getElementById("powerLabel").innerText = "CONNECTED";
+        document.getElementById("statusTitle").innerText = "Connected";
+        document.getElementById("statusSub").innerText = `Server #${idx + 1} Unlocked • Tap below to launch tunnel`;
+
+        clearInterval(sessionInterval);
+        sessionInterval = setInterval(() => {
+          if (remainingSeconds > 0) {
+            remainingSeconds--;
+            updateTimerUI();
+          } else {
+            toggleConnection();
+            startSponsorAd();
+          }
+        }, 1000);
+      }, 650);
+    }
+
+    function copyActiveConfig() {
+      if (servers.length === 0) return;
+      const idx = parseInt(document.getElementById("serverSelect").value || "0", 10);
+      navigator.clipboard.writeText(servers[idx] || servers[0]);
+      alert("✅ High-speed server config copied! Paste it into V2Box, Streisand, or Shadowrocket.");
+    }
+
+    function startSponsorAd() {
+      // Open sponsor link in a new tab as fallback if iframe is blocked by ad network headers, while keeping in-app timer active
+      window.open(AD_DIRECT_LINK, "_blank");
+
+      const modal = document.getElementById("adModal");
+      const frame = document.getElementById("adFrame");
+      const timerText = document.getElementById("adTimerText");
+      const claimBtn = document.getElementById("claimBtn");
+
+      modal.classList.add("active");
+      frame.src = AD_DIRECT_LINK;
+      claimBtn.style.display = "none";
+
+      let left = 15;
+      timerText.innerText = `⏱ Wait ${left} seconds...`;
+
+      clearInterval(adInterval);
+      adInterval = setInterval(() => {
+        left--;
+        if (left > 0) {
+          timerText.innerText = `⏱ Wait ${left} seconds...`;
+        } else {
+          clearInterval(adInterval);
+          timerText.innerText = "✅ Reward Unlocked!";
+          claimBtn.style.display = "inline-flex";
+        }
+      }, 1000);
+    }
+
+    function claimReward() {
+      remainingSeconds += 7200;
+      updateTimerUI();
+      document.getElementById("adFrame").src = "about:blank";
+      document.getElementById("adModal").classList.remove("active");
+      document.getElementById("statusSub").innerText = "+2 Hours Free Time Added!";
+    }
+
+    function closeAdEarly() {
+      clearInterval(adInterval);
+      document.getElementById("adFrame").src = "about:blank";
+      document.getElementById("adModal").classList.remove("active");
+    }
+
+    function toggleDrawer(open) {
+      document.getElementById("drawer").classList.toggle("open", open);
+      document.getElementById("drawerOverlay").classList.toggle("open", open);
+    }
+
+    function showAlert(title, msg) {
+      toggleDrawer(false);
+      alert(`${title}\n\n${msg}`);
+    }
+
+    function shareApp() {
+      toggleDrawer(false);
+      navigator.clipboard.writeText(window.location.href);
+      alert("✅ iOS Web App Link copied to clipboard!");
+    }
+
+    updateTimerUI();
+    syncServers();
+  </script>
+</body>
+</html>
