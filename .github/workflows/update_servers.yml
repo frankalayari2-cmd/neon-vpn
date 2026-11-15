@@ -2,8 +2,8 @@ name: Auto Update Servers Hourly
 
 on:
   schedule:
-    - cron: '0 * * * *' # اجرای خودکار در دقیقه صفر هر ساعت
-  workflow_dispatch:    # امکان اجرای دستی با یک کلیک
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,40 +15,24 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fetch, Test Ping & Filter Working Servers
+      - name: Fetch and Test Real TLS/Reality Servers
         run: |
           python3 - << 'EOF'
           import urllib.request
           import base64
           import socket
+          import ssl
           import time
           import re
           from concurrent.futures import ThreadPoolExecutor
 
-          # ۱. نگه داشتن سرورهای دستی که خودتان در فایل servers.txt گذاشته‌اید
-          manual_servers = []
-          try:
-              with open("servers.txt", "r", encoding="utf-8") as f:
-                  for line in f.read().splitlines():
-                      line = line.strip()
-                      if line.startswith(("vless://", "trojan://", "vmess://", "ss://")) and "#Auto-Server" not in line:
-                          manual_servers.append(line)
-          except Exception:
-              pass
-
-          if not manual_servers:
-              manual_servers = [
-                  "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-1",
-                  "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-2",
-              ]
-
-          # ۲. منابع معتبر کانفیگ‌های روزانه (مخصوص پروتکل‌های ضد فیلتر ایران)
           sources = [
-              "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/reality",
-              "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/mix",
               "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
               "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub2.txt",
+              "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub3.txt",
               "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
+              "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/trojan.txt",
+              "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
           ]
 
           raw_configs = []
@@ -68,51 +52,68 @@ jobs:
                       for line in content.splitlines():
                           line = line.strip()
                           if line.startswith(("vless://", "trojan://")):
-                              if "security=reality" in line or "type=ws" in line or "type=grpc" in line:
+                              if "security=reality" in line or "security=tls" in line:
                                   raw_configs.append(line)
               except Exception:
                   continue
 
-          unique_configs = list(dict.fromkeys(raw_configs))[:150]
+          # حذف آی‌پی‌های کلودفلر و فستلی که پینگ کاذب می‌دهند
+          cdn_prefixes = ("104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.", "172.64.", "172.67.", "199.232.", "151.101.")
+          filtered_configs = []
+          seen_hosts = set()
 
-          # ۳. تست واقعی اتصال (TCP Handshake) برای حذف سرورهای خاموش
-          def check_server(cfg):
+          for cfg in raw_configs:
+              m = re.search(r'://[^@]+@([^:/?#]+):(\d+)', cfg)
+              if not m:
+                  continue
+              host, port = m.group(1), int(m.group(2))
+              if host.startswith(cdn_prefixes) or host in seen_hosts:
+                  continue
+              seen_hosts.add(host)
+              filtered_configs.append((cfg, host, port))
+              if len(filtered_configs) >= 200:
+                  break
+
+          # تست واقعی هندشیک TLS/TCP روی پورت سرور
+          def test_server(item):
+              cfg, host, port = item
               try:
-                  m = re.search(r'://[^@]+@([^:/?#]+):(\d+)', cfg)
-                  if not m:
-                      return None
-                  host, port = m.group(1), int(m.group(2))
                   start = time.time()
-                  with socket.create_connection((host, port), timeout=1.5):
+                  sock = socket.create_connection((host, port), timeout=2.0)
+                  ctx = ssl.create_default_context()
+                  ctx.check_hostname = False
+                  ctx.verify_mode = ssl.CERT_NONE
+                  with ctx.wrap_socket(sock, server_hostname=host):
                       ping = int((time.time() - start) * 1000)
-                      if 15 < ping < 800:
-                          base_cfg = cfg.split('#')[0]
-                          return (ping, f"{base_cfg}#Auto-Server ({ping}ms)")
+                      if 20 < ping < 900:
+                          base_cfg = cfg.split('#')[0].strip()
+                          return (ping, base_cfg)
               except Exception:
                   return None
               return None
 
           working = []
-          with ThreadPoolExecutor(max_workers=30) as executor:
-              for result in executor.map(check_server, unique_configs):
-                  if result:
-                      working.append(result)
+          with ThreadPoolExecutor(max_workers=35) as executor:
+              for res in executor.map(test_server, filtered_configs):
+                  if res:
+                      working.append(res)
 
-          # مرتب‌سازی از سریع‌ترین پینگ و انتخاب ۲۵ سرور برتر
           working.sort(key=lambda x: x[0])
-          best_auto_servers = [item[1] for item in working[:25]]
+          final_lines = []
+          for idx, (ping, base_cfg) in enumerate(working[:30]):
+              # نام‌گذاری بدون فاصله برای جلوگیری از خطای فلاتر
+              final_lines.append(f"{base_cfg}#Server-{idx+1}-{ping}ms")
 
-          final_list = manual_servers[:10] + best_auto_servers
-          with open("servers.txt", "w", encoding="utf-8") as f:
-              f.write("\n".join(final_list) + "\n")
-
-          print(f"Updated servers.txt with {len(final_list)} active servers!")
+          if final_lines:
+              with open("servers.txt", "w", encoding="utf-8") as f:
+                  f.write("\n".join(final_lines) + "\n")
+              print(f"Successfully saved {len(final_lines)} verified servers!")
           EOF
 
-      - name: Save Updated Servers to GitHub
+      - name: Commit and Push servers.txt
         run: |
           git config --global user.name "NeonVPN Bot"
           git config --global user.email "bot@neonvpn.app"
           git add servers.txt
-          git diff --staged --quiet || git commit -m "Auto-update active servers [skip ci]"
+          git diff --staged --quiet || git commit -m "Update 30 verified servers [skip ci]"
           git push
