@@ -1,21 +1,21 @@
-name: Auto Update Servers Hourly
+name: Auto Sync Cloudflare to GitHub
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # اجرای خودکار سر هر ساعت
+  workflow_dispatch:    # اجرای فوری با یک کلیک
 
 permissions:
   contents: write
 
 jobs:
-  update-servers:
+  sync-cloudflare-servers:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fetch and Test Real TLS/Reality Servers
+      - name: Fetch Cloudflare Worker & Inject Clean IPs
         run: |
           python3 - << 'EOF'
           import urllib.request
@@ -24,15 +24,45 @@ jobs:
           import ssl
           import time
           import re
+          from urllib.parse import urlparse, parse_qs
           from concurrent.futures import ThreadPoolExecutor
 
+          # ۱. لیست آی‌پی‌های تمیز و ضد فیلتر کلودفلر برای اپراتورهای ایران
+          CLEAN_CF_IPS = [
+              "www.speedtest.net",
+              "162.159.135.42",
+              "104.18.2.161",
+              "172.66.44.106",
+              "104.17.147.22",
+              "104.16.132.229",
+              "172.64.80.1",
+          ]
+
+          # ۲. بررسی خودکار آدرس ورکر کلودفلر شخصی شما
+          possible_worker_urls = [
+              "https://neon-vpn.frankalayari2.workers.dev",
+              "https://neon-vpn.frankalayari2-cmd.workers.dev",
+          ]
+
+          personal_cf_configs = []
+          for w_url in possible_worker_urls:
+              try:
+                  req = urllib.request.Request(w_url, headers={'User-Agent': 'Mozilla/5.0'})
+                  with urllib.request.urlopen(req, timeout=5) as resp:
+                      body = resp.read().decode('utf-8', errors='ignore').strip()
+                      for line in body.splitlines():
+                          if line.startswith("vless://"):
+                              personal_cf_configs.append(line.split('#')[0].strip())
+              except Exception:
+                  continue
+
+          # ۳. دریافت خودکار کانفیگ‌های کلودفلر (WS-TLS) و Reality روزانه
           sources = [
+              "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/reality",
               "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
               "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub2.txt",
-              "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub3.txt",
               "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
-              "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/trojan.txt",
-              "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
+              "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/splitted/vless.txt",
           ]
 
           raw_configs = []
@@ -52,68 +82,89 @@ jobs:
                       for line in content.splitlines():
                           line = line.strip()
                           if line.startswith(("vless://", "trojan://")):
-                              if "security=reality" in line or "security=tls" in line:
+                              if "security=tls" in line or "security=reality" in line:
                                   raw_configs.append(line)
               except Exception:
                   continue
 
-          # حذف آی‌پی‌های کلودفلر و فستلی که پینگ کاذب می‌دهند
-          cdn_prefixes = ("104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.", "172.64.", "172.67.", "199.232.", "151.101.")
-          filtered_configs = []
-          seen_hosts = set()
+          # ۴. بهینه‌سازی کانفیگ‌های کلودفلر با آی‌پی تمیز + آماده‌سازی برای تست واقعی
+          candidates = []
+          seen = set()
+          ip_idx = 0
 
           for cfg in raw_configs:
-              m = re.search(r'://[^@]+@([^:/?#]+):(\d+)', cfg)
+              base_cfg = cfg.split('#')[0].strip()
+              m = re.search(r'^([a-z0-9]+://[^@]+@)([^:/?#]+):(\d+)(\?.*)$', base_cfg)
               if not m:
                   continue
-              host, port = m.group(1), int(m.group(2))
-              if host.startswith(cdn_prefixes) or host in seen_hosts:
-                  continue
-              seen_hosts.add(host)
-              filtered_configs.append((cfg, host, port))
-              if len(filtered_configs) >= 200:
+              prefix, host, port_str, query = m.group(1), m.group(2), m.group(3), m.group(4)
+              port = int(port_str)
+
+              # اگر سرور روی کلودفلر (WebSocket + TLS و پورت 443) است، آی‌پی تمیز کلودفلر را تزریق کن
+              if "type=ws" in query and "security=tls" in query and port == 443:
+                  sni_match = re.search(r'[?&](?:sni|host)=([^&#]+)', query)
+                  real_sni = sni_match.group(1) if sni_match else host
+                  if real_sni and not re.match(r'^\d+\.\d+\.\d+\.\d+$', real_sni):
+                      clean_ip = CLEAN_CF_IPS[ip_idx % len(CLEAN_CF_IPS)]
+                      ip_idx += 1
+                      rebuilt_cfg = f"{prefix}{clean_ip}:443{query}"
+                      if rebuilt_cfg not in seen:
+                          seen.add(rebuilt_cfg)
+                          candidates.append((rebuilt_cfg, clean_ip, 443, real_sni))
+                      continue
+
+              # سایر سرورهای مستقیم و Reality
+              if host not in seen:
+                  seen.add(host)
+                  candidates.append((base_cfg, host, port, host))
+
+              if len(candidates) >= 180:
                   break
 
-          # تست واقعی هندشیک TLS/TCP روی پورت سرور
-          def test_server(item):
-              cfg, host, port = item
+          # ۵. تست واقعی اتصال و هندشیک SSL روی سرورها
+          def verify_server(item):
+              cfg, test_host, test_port, sni_host = item
               try:
                   start = time.time()
-                  sock = socket.create_connection((host, port), timeout=2.0)
+                  sock = socket.create_connection((test_host, test_port), timeout=2.0)
                   ctx = ssl.create_default_context()
                   ctx.check_hostname = False
                   ctx.verify_mode = ssl.CERT_NONE
-                  with ctx.wrap_socket(sock, server_hostname=host):
+                  with ctx.wrap_socket(sock, server_hostname=sni_host):
                       ping = int((time.time() - start) * 1000)
-                      if 20 < ping < 900:
-                          base_cfg = cfg.split('#')[0].strip()
-                          return (ping, base_cfg)
+                      if 15 < ping < 850:
+                          return (ping, cfg)
               except Exception:
                   return None
               return None
 
-          working = []
+          verified = []
           with ThreadPoolExecutor(max_workers=35) as executor:
-              for res in executor.map(test_server, filtered_configs):
+              for res in executor.map(verify_server, candidates):
                   if res:
-                      working.append(res)
+                      verified.append(res)
 
-          working.sort(key=lambda x: x[0])
+          verified.sort(key=lambda x: x[0])
+
           final_lines = []
-          for idx, (ping, base_cfg) in enumerate(working[:30]):
-              # نام‌گذاری بدون فاصله برای جلوگیری از خطای فلاتر
-              final_lines.append(f"{base_cfg}#Server-{idx+1}-{ping}ms")
+          # قرار دادن سرورهای ورکر شخصی در صدر لیست (در صورت فعال بودن)
+          for idx, p_cfg in enumerate(personal_cf_configs[:5]):
+              final_lines.append(f"{p_cfg}#CF-VIP-{idx+1}")
+
+          # افزودن ۳۰ سرور تست‌شده کلودفلر و Reality
+          for idx, (ping, cfg) in enumerate(verified[:30]):
+              final_lines.append(f"{cfg}#CF-Auto-{idx+1}")
 
           if final_lines:
               with open("servers.txt", "w", encoding="utf-8") as f:
                   f.write("\n".join(final_lines) + "\n")
-              print(f"Successfully saved {len(final_lines)} verified servers!")
+              print(f"Saved {len(final_lines)} working Cloudflare/Reality servers to servers.txt")
           EOF
 
-      - name: Commit and Push servers.txt
+      - name: Save to servers.txt
         run: |
-          git config --global user.name "NeonVPN Bot"
+          git config --global user.name "NeonVPN AutoBot"
           git config --global user.email "bot@neonvpn.app"
           git add servers.txt
-          git diff --staged --quiet || git commit -m "Update 30 verified servers [skip ci]"
+          git diff --staged --quiet || git commit -m "Auto-sync Cloudflare servers [skip ci]"
           git push
