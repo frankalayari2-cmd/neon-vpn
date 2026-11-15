@@ -1,12 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
   runApp(const NeonVpnApp());
 }
 
@@ -19,7 +26,7 @@ class NeonVpnApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Neon VPN',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0B0F19),
+        scaffoldBackgroundColor: const Color(0xFF070A12),
         primaryColor: const Color(0xFF00F5D4),
       ),
       home: const VpnHomeScreen(),
@@ -35,10 +42,12 @@ class VpnHomeScreen extends StatefulWidget {
 }
 
 class _VpnHomeScreenState extends State<VpnHomeScreen> {
-  // لینک تبلیغاتی شما:
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // Your Adsterra Direct Link:
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // لینک‌های دریافت خودکار فایل servers.txt از گیت‌هاب شما (به همراه آینه‌های ضد فیلتر):
+  // Auto-synced GitHub server list + CDN mirrors:
   final List<String> myGithubServerUrls = [
     "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
     "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/refs/heads/main/servers.txt",
@@ -66,7 +75,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   Timer? _usageTimer;
   Timer? _autoRefreshTimer;
   int _ping = 0;
-  String _statusMessage = "در حال دریافت خودکار سرورها...";
+  String _statusSubtext = "Ready to connect";
 
   final List<String> _bypassApps = [
     "com.neonvpn.app",
@@ -96,7 +105,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     await _loadSavedState();
     await _syncServersFromGithub(silent: true);
 
-    // بروزرسانی خودکار لیست سرورها در پس‌زمینه هر ۳۰ دقیقه
     _autoRefreshTimer = Timer.periodic(const Duration(minutes: 30), (_) {
       if (!_isConnected && !_isConnecting) {
         _syncServersFromGithub(silent: true);
@@ -108,7 +116,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _remainingSeconds = prefs.getInt('remaining_seconds') ?? 3600;
-      final savedAll = prefs.getStringList('auto_cf_servers_v7');
+      final savedAll = prefs.getStringList('auto_cf_servers_v8');
       if (savedAll != null && savedAll.isNotEmpty) {
         _serverList = savedAll;
       }
@@ -139,7 +147,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
           line.startsWith("ss://")) {
         try {
           final String basePart = line.split('#').first.trim();
-          final String cleanLine = "$basePart#CF-Server-${validConfigs.length + 1}";
+          final String cleanLine = "$basePart#Server-${validConfigs.length + 1}";
           FlutterV2ray.parseFromURL(cleanLine);
           validConfigs.add(cleanLine);
         } catch (_) {}
@@ -178,12 +186,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
-  // دریافت خودکار سرورها از فایل servers.txt گیت‌هاب شما
   Future<void> _syncServersFromGithub({bool silent = false}) async {
     if (_isUpdatingServers) return;
     setState(() {
       _isUpdatingServers = true;
-      _statusMessage = "در حال بروزرسانی خودکار سرورهای کلودفلر از گیت‌هاب...";
+      _statusSubtext = "Syncing cloud servers...";
     });
 
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -213,38 +220,38 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         _serverList = fetchedServers;
         _selectedServerIndex = 0;
         _isUpdatingServers = false;
-        _statusMessage = "✅ ${fetchedServers.length} سرور کلودفلر به صورت خودکار دریافت شد";
+        _statusSubtext = "${fetchedServers.length} High-Speed Servers Ready";
       });
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('auto_cf_servers_v7', fetchedServers);
+      await prefs.setStringList('auto_cf_servers_v8', fetchedServers);
 
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: Colors.green.shade700,
-            content: Text("🚀 ${fetchedServers.length} سرور جدید به صورت خودکار آپدیت شد!"),
+            backgroundColor: const Color(0xFF00B4D8),
+            content: Text("⚡ Updated ${fetchedServers.length} fast servers!"),
           ),
         );
       }
     } else {
       setState(() {
         _isUpdatingServers = false;
-        _statusMessage = _serverList.isNotEmpty
-            ? "آماده اتصال (${_serverList.length} سرور ذخیره شده)"
-            : "در انتظار اتصال اینترنت برای دریافت سرورها...";
+        _statusSubtext = _serverList.isNotEmpty
+            ? "${_serverList.length} Cached Servers Ready"
+            : "Tap sync icon to load servers";
       });
     }
   }
 
-  // اتصال ۱۰۰٪ خودکار: تست ترتیبی سرورها تا پیدا کردن اولین سرور پاسخ‌گو
   Future<void> _toggleVpn() async {
     if (_isConnected) {
       await _flutterV2ray.stopV2Ray();
       _usageTimer?.cancel();
       setState(() {
         _isConnected = false;
-        _statusMessage = "اتصال قطع شد";
+        _ping = 0;
+        _statusSubtext = "Disconnected";
       });
       return;
     }
@@ -262,26 +269,25 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     if (!await _flutterV2ray.requestPermission()) {
       setState(() {
         _isConnecting = false;
-        _statusMessage = "مجوز اتصال VPN داده نشد";
+        _statusSubtext = "VPN permission denied";
       });
       return;
     }
 
     setState(() {
       _isConnecting = true;
-      _statusMessage = "جستجوی خودکار بهترین سرور کلودفلر...";
+      _statusSubtext = "Finding fastest node...";
     });
 
     int workingIndex = _selectedServerIndex;
     int verifiedPing = 0;
     String workingConfigJson = "";
 
-    // بررسی خودکار تا ۱۰ سرور برای یافتن سروری که روی اینترنت فعلی کاربر پینگ واقعی بدهد
     final int maxChecks = _serverList.length < 10 ? _serverList.length : 10;
     for (int i = 0; i < maxChecks; i++) {
       final int candidateIndex = (_selectedServerIndex + i) % _serverList.length;
       setState(() {
-        _statusMessage = "تست خودکار سرور #${candidateIndex + 1}...";
+        _statusSubtext = "Testing Server #${candidateIndex + 1}...";
       });
 
       try {
@@ -299,7 +305,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       } catch (_) {}
     }
 
-    // اگر پینگ اولیه مسدود بود، با همان سرور انتخابی مستقیماً تونل را باز کن
     if (workingConfigJson.isEmpty) {
       workingConfigJson = _buildUnlockedConfigJson(_serverList[_selectedServerIndex]);
     }
@@ -316,35 +321,18 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         _ping = verifiedPing;
         _isConnected = true;
         _isConnecting = false;
-        _statusMessage = verifiedPing > 0
-            ? "⚡ متصل به سرور #${workingIndex + 1} (پینگ: $verifiedPing ms)"
-            : "⚡ متصل به سرور #${workingIndex + 1}";
+        _statusSubtext = verifiedPing > 0
+            ? "Server #${workingIndex + 1} • $verifiedPing ms"
+            : "Server #${workingIndex + 1} Active";
       });
       _startCountdown();
     } catch (e) {
       setState(() {
         _isConnecting = false;
-        _statusMessage = "خطا در اتصال؛ در حال دریافت لیست جدید...";
+        _statusSubtext = "Connection failed. Retrying...";
       });
       await _syncServersFromGithub(silent: false);
     }
-  }
-
-  Future<void> _switchToNextWorkingServer() async {
-    if (_serverList.isEmpty || _isConnecting) return;
-
-    if (_isConnected) {
-      await _flutterV2ray.stopV2Ray();
-      _usageTimer?.cancel();
-      setState(() => _isConnected = false);
-    }
-
-    setState(() {
-      _selectedServerIndex = (_selectedServerIndex + 1) % _serverList.length;
-      _ping = 0;
-    });
-
-    await _toggleVpn();
   }
 
   void _startCountdown() {
@@ -364,13 +352,12 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   }
 
   Future<void> _openInAppAdScreen() async {
-    bool wasConnected = _isConnected;
-    if (wasConnected) {
+    if (_isConnected) {
       await _flutterV2ray.stopV2Ray();
       _usageTimer?.cancel();
       setState(() {
         _isConnected = false;
-        _statusMessage = "توقف موقت برای بارگذاری تبلیغ...";
+        _statusSubtext = "Paused for sponsor ad...";
       });
     }
 
@@ -386,14 +373,14 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     if (rewarded == true) {
       setState(() {
         _remainingSeconds += 7200;
-        _statusMessage = "۲ ساعت زمان رایگان اضافه شد!";
+        _statusSubtext = "+2 Hours Free Time Added!";
       });
       await _saveRemainingTime();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.green,
-            content: Text("🎉 تبریک! ۲ ساعت به زمان اتصال شما اضافه شد."),
+            content: Text("🎉 +2 Hours added to your free session!"),
           ),
         );
       }
@@ -402,11 +389,152 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.redAccent,
-            content: Text("⚠️ تبلیغ را کامل مشاهده نکردید؛ زمانی اضافه نشد."),
+            content: Text("⚠️ Ad closed early. Please watch for 15s to unlock free time."),
           ),
         );
       }
     }
+  }
+
+  void _showServerPickerModal() {
+    if (_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Disconnect first to change server.")),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF101726),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 45,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  "Select High-Speed Server",
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4)),
+                ),
+              ),
+              Flexible(
+                child: _serverList.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Text("Loading servers..."),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _serverList.length,
+                        itemBuilder: (context, index) {
+                          final bool isSelected = index == _selectedServerIndex;
+                          return ListTile(
+                            leading: Icon(
+                              Icons.flag_circle_rounded,
+                              color: isSelected ? const Color(0xFF00F5D4) : Colors.white54,
+                              size: 28,
+                            ),
+                            title: Text(
+                              "Neon Cloud Server #${index + 1}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? const Color(0xFF00F5D4) : Colors.white,
+                              ),
+                            ),
+                            subtitle: const Text("Optimized VLESS / TLS", style: TextStyle(fontSize: 12, color: Colors.white54)),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00F5D4))
+                                : const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                            onTap: () {
+                              setState(() {
+                                _selectedServerIndex = index;
+                                _ping = 0;
+                              });
+                              Navigator.pop(context);
+                              _toggleVpn();
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showCustomConfigDialog() {
+    final TextEditingController controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF131B2E),
+        title: const Text("Import Custom Config", style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: "Paste vless://, trojan:// or Base64 subscription...",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
+            onPressed: () async {
+              final extracted = _extractAndCleanConfigs(controller.text);
+              if (extracted.isNotEmpty) {
+                setState(() {
+                  _serverList = [...extracted, ..._serverList];
+                  _selectedServerIndex = 0;
+                });
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setStringList('auto_cf_servers_v8', _serverList);
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text("Import"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF131B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
+        content: Text(content, style: const TextStyle(color: Colors.white70, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK", style: TextStyle(color: Color(0xFF00F5D4))),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatTime(int totalSeconds) {
@@ -416,227 +544,545 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     return "$hours:$minutes:$seconds";
   }
 
+  // Parallel Neon Lines Widget (Off when disconnected, Glowing Neon when connected)
+  Widget _buildParallelNeonBars({required bool isLeft}) {
+    final List<double> widths = isLeft ? [26, 42, 58, 42, 26] : [26, 42, 58, 42, 26];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: isLeft ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: List.generate(widths.length, (i) {
+        final Color barColor = _isConnected
+            ? (i.isEven ? const Color(0xFF00F5D4) : const Color(0xFF00BBF9))
+            : (_isConnecting ? Colors.amber.withOpacity(0.7) : const Color(0xFF1B2438));
+
+        return AnimatedContainer(
+          duration: Duration(milliseconds: 300 + (i * 70)),
+          margin: const EdgeInsets.symmetric(vertical: 5),
+          width: widths[i],
+          height: 4.5,
+          decoration: BoxDecoration(
+            color: barColor,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: _isConnected
+                ? [
+                    BoxShadow(
+                      color: barColor.withOpacity(0.9),
+                      blurRadius: 12,
+                      spreadRadius: 1.5,
+                    ),
+                  ]
+                : [],
+          ),
+        );
+      }),
+    );
+  }
+
+  // Horizontal Parallel Neon Lines across the panel
+  Widget _buildHorizontalParallelLines() {
+    return Column(
+      children: List.generate(3, (index) {
+        final double widthFactor = index == 0 ? 0.75 : (index == 1 ? 0.55 : 0.35);
+        final Color lineColor = _isConnected
+            ? (index == 1 ? const Color(0xFF9B5DE5) : const Color(0xFF00F5D4))
+            : (_isConnecting ? Colors.amber.withOpacity(0.5) : const Color(0xFF1A2235));
+
+        return AnimatedContainer(
+          duration: Duration(milliseconds: 350 + (index * 100)),
+          margin: const EdgeInsets.symmetric(vertical: 3.5),
+          height: 3,
+          width: MediaQuery.of(context).size.width * widthFactor,
+          decoration: BoxDecoration(
+            color: lineColor,
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: _isConnected
+                ? [
+                    BoxShadow(
+                      color: lineColor.withOpacity(0.85),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : [],
+          ),
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          tooltip: "آپدیت فوری سرورها",
-          icon: _isUpdatingServers
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)))
-              : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
-          onPressed: _isUpdatingServers ? null : () => _syncServersFromGithub(silent: false),
-        ),
-        title: const Text("NEON VPN", style: TextStyle(letterSpacing: 3, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4))),
-      ),
+      key: _scaffoldKey,
+      drawer: _buildNeonDrawer(),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF161F30),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.bolt, color: _ping > 0 ? Colors.greenAccent : Colors.amber),
-                            const SizedBox(width: 4),
-                            Text(_ping > 0 ? "$_ping ms" : "Auto", style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                          ],
-                        ),
-                        DropdownButtonHideUnderline(
-                          child: DropdownButton<int>(
-                            dropdownColor: const Color(0xFF161F30),
-                            value: _selectedServerIndex < _serverList.length ? _selectedServerIndex : 0,
-                            items: _serverList.isEmpty
-                                ? [
-                                    const DropdownMenuItem<int>(
-                                      value: 0,
-                                      child: Text("در حال دریافت خودکار سرورها...", style: TextStyle(fontSize: 13)),
-                                    )
-                                  ]
-                                : List.generate(_serverList.length, (index) {
-                                    return DropdownMenuItem<int>(
-                                      value: index,
-                                      child: Text(
-                                        "☁️ سرور اتوماتیک کلودفلر #${index + 1} (از ${_serverList.length})",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          color: Color(0xFF00F5D4),
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                            onChanged: _isConnected
-                                ? null
-                                : (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _selectedServerIndex = val;
-                                        _ping = 0;
-                                      });
-                                    }
-                                  },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _statusMessage,
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 10.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1422),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: _isConnected ? const Color(0xFF00F5D4).withOpacity(0.4) : Colors.white10,
+                width: 1.5,
               ),
-              Column(
-                children: [
-                  GestureDetector(
-                    onTap: _isConnecting ? null : _toggleVpn,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: 175,
-                      height: 175,
+              boxShadow: [
+                BoxShadow(
+                  color: _isConnected ? const Color(0xFF00F5D4).withOpacity(0.12) : Colors.black54,
+                  blurRadius: 25,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Top Curved Header + Overlapping Central Button (Gozal VPN Layout)
+                Stack(
+                  alignment: Alignment.bottomCenter,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: 250,
+                      margin: const EdgeInsets.only(bottom: 75),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF161F30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _isConnected
-                                ? const Color(0xFF00F5D4).withOpacity(0.5)
-                                : (_isConnecting ? Colors.amber.withOpacity(0.4) : Colors.blueGrey.withOpacity(0.2)),
-                            blurRadius: 35,
-                            spreadRadius: 8,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF141E33), Color(0xFF0B101D)],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(30),
+                          topRight: Radius.circular(30),
+                          bottomLeft: Radius.circular(48),
+                          bottomRight: Radius.circular(48),
+                        ),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: _isConnected ? const Color(0xFF00F5D4) : const Color(0xFF1E293B),
+                            width: 2,
                           ),
-                        ],
-                        border: Border.all(
-                          color: _isConnected ? const Color(0xFF00F5D4) : (_isConnecting ? Colors.amber : Colors.white24),
-                          width: 4,
                         ),
                       ),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.power_settings_new_rounded,
-                            size: 56,
-                            color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
+                          // Top Bar (4-Square Menu Icon + Sync Button)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 14.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.white38, width: 1.4),
+                                    ),
+                                    child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 22),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: "Sync Servers",
+                                  icon: _isUpdatingServers
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
+                                        )
+                                      : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
+                                  onPressed: _isUpdatingServers ? null : () => _syncServersFromGithub(silent: false),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // App Logo & Neon Title
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF0E1422),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _isConnected
+                                      ? const Color(0xFF00F5D4).withOpacity(0.5)
+                                      : const Color(0xFF9B5DE5).withOpacity(0.25),
+                                  blurRadius: 20,
+                                ),
+                              ],
+                            ),
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => const LinearGradient(
+                                colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
+                              ).createShader(bounds),
+                              child: const Icon(Icons.shield_moon_rounded, size: 42, color: Colors.white),
+                            ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            _isConnecting ? "جستجوی خودکار..." : (_isConnected ? "متصل شد" : "اتصال اتوماتیک"),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: _isConnected ? const Color(0xFF00F5D4) : Colors.white70,
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
+                            ).createShader(bounds),
+                            child: const Text(
+                              "Neon VPN",
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.amberAccent,
-                      side: const BorderSide(color: Colors.amberAccent, width: 1.2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    onPressed: _isConnecting ? null : _switchToNextWorkingServer,
-                    icon: const Icon(Icons.skip_next_rounded, size: 20),
-                    label: const Text("تعویض خودکار به سرور بعدی ⏭️", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF161F30), Color(0xFF1E293B)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  children: [
-                    const Text("زمان باقی‌مانده اتصال رایگان", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatTime(_remainingSeconds),
-                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00F5D4),
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: _openInAppAdScreen,
-                        icon: const Icon(Icons.play_circle_fill_rounded),
-                        label: const Text("افزایش زمان رایگان (+۲ ساعت)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+
+                    // Central Button + Left & Right Parallel Neon Lines
+                    Positioned(
+                      bottom: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildParallelNeonBars(isLeft: true),
+                          const SizedBox(width: 14),
+                          GestureDetector(
+                            onTap: _isConnecting ? null : _toggleVpn,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 350),
+                              width: 156,
+                              height: 156,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF0B0F19),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _isConnected
+                                        ? const Color(0xFF00F5D4).withOpacity(0.6)
+                                        : (_isConnecting ? Colors.amber.withOpacity(0.4) : Colors.black87),
+                                    blurRadius: 30,
+                                    spreadRadius: _isConnected ? 6 : 2,
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: _isConnected
+                                      ? const Color(0xFF00F5D4)
+                                      : (_isConnecting ? Colors.amber : const Color(0xFF26334D)),
+                                  width: 5,
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.bolt_rounded,
+                                    size: 64,
+                                    color: _isConnected
+                                        ? const Color(0xFF00F5D4)
+                                        : (_isConnecting ? Colors.amber : Colors.white70),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _isConnecting
+                                        ? "WAIT..."
+                                        : (_isConnected ? "CONNECTED" : "LET'S GO"),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.2,
+                                      color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          _buildParallelNeonBars(isLeft: false),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildSpeedCard("دانلود", "${(_v2rayStatus.downloadSpeed / 1024).toStringAsFixed(1)} KB/s", Icons.arrow_downward_rounded, Colors.greenAccent),
-                  _buildSpeedCard("آپلود", "${(_v2rayStatus.uploadSpeed / 1024).toStringAsFixed(1)} KB/s", Icons.arrow_upward_rounded, Colors.cyanAccent),
-                ],
-              ),
-            ],
+
+                // Horizontal Parallel Neon Lines (Off before connection, Glowing when connected)
+                _buildHorizontalParallelLines(),
+
+                // Connection Status Text
+                Column(
+                  children: [
+                    Text(
+                      _isConnected ? "Connected" : (_isConnecting ? "Connecting..." : "Not Connected"),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _statusSubtext,
+                      style: const TextStyle(fontSize: 12, color: Colors.white54),
+                    ),
+                  ],
+                ),
+
+                // "Connect To Server" Selector Row (Matching Screenshot 1)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22.0),
+                  child: InkWell(
+                    onTap: _showServerPickerModal,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141D30),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _isConnected ? const Color(0xFF00F5D4).withOpacity(0.5) : Colors.white12,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _isConnected ? const Color(0xFF00F5D4).withOpacity(0.2) : Colors.white10,
+                            ),
+                            child: Icon(
+                              Icons.outlined_flag_rounded,
+                              color: _isConnected ? const Color(0xFF00F5D4) : Colors.white70,
+                              size: 20,
+                            ),
+                          ),
+                          Text(
+                            _serverList.isEmpty
+                                ? "Connect To Server"
+                                : "Connect To Server (#${_selectedServerIndex + 1})",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white38, width: 1.2),
+                            ),
+                            child: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Free Session Timer + Reward Ad Button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF131B2E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("FREE SESSION TIME", style: TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 1)),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatTime(_remainingSeconds),
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00F5D4),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _openInAppAdScreen,
+                          icon: const Icon(Icons.play_circle_fill_rounded, size: 18),
+                          label: const Text("Add +2 Hours", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSpeedCard(String title, String speed, IconData icon, Color color) {
-    return Container(
-      width: 150,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161F30),
-        borderRadius: BorderRadius.circular(14),
+  // Side Drawer Menu (Matching Screenshot 2 in Neon Style)
+  Widget _buildNeonDrawer() {
+    return Drawer(
+      backgroundColor: const Color(0xFF0E1422),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              Text(speed, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            ],
+          // Curved Top Header inside Drawer
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(top: 55, bottom: 35),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF18243E), Color(0xFF0B101D)],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(40),
+                bottomRight: Radius.circular(40),
+              ),
+              border: Border(
+                bottom: BorderSide(color: Color(0xFF00F5D4), width: 1.5),
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF0E1422),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00F5D4).withOpacity(0.4),
+                        blurRadius: 20,
+                      ),
+                    ],
+                  ),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
+                    ).createShader(bounds),
+                    child: const Icon(Icons.shield_moon_rounded, size: 54, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
+                  ).createShader(bounds),
+                  child: const Text(
+                    "Neon VPN",
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildDrawerItem(
+            icon: Icons.home_outlined,
+            title: "Home",
+            onTap: () => Navigator.pop(context),
+          ),
+          _buildDrawerItem(
+            icon: Icons.verified_user_outlined,
+            title: "Privacy Policy",
+            onTap: () {
+              Navigator.pop(context);
+              _showInfoDialog(
+                "Privacy Policy",
+                "Neon VPN strictly follows a zero-log policy. We do not track, store, or share your browsing activity, DNS queries, or connection timestamps.",
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.share_outlined,
+            title: "Share To Friends",
+            onTap: () {
+              Navigator.pop(context);
+              Clipboard.setData(
+                const ClipboardData(
+                  text: "Download Neon VPN - Fast, Free & Secure V2Ray VPN: https://github.com/frankalayari2-cmd/neon-vpn/releases",
+                ),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Color(0xFF00B4D8),
+                  content: Text("✅ Share link copied to clipboard! Send it to your friends."),
+                ),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.person_outline_rounded,
+            title: "About Us",
+            onTap: () {
+              Navigator.pop(context);
+              _showInfoDialog(
+                "About Neon VPN",
+                "Version 2.0.0 (Global Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
+              );
+            },
+          ),
+          const Divider(color: Colors.white12, height: 32, indent: 24, endIndent: 24),
+          _buildDrawerItem(
+            icon: Icons.paste_rounded,
+            title: "Import Custom Config",
+            onTap: () {
+              Navigator.pop(context);
+              _showCustomConfigDialog();
+            },
           ),
         ],
       ),
     );
   }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 4),
+      leading: Icon(icon, color: const Color(0xFF00F5D4), size: 24),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
 }
 
+// ============================================================================
+// In-App Sponsor Ad Screen (English UI + Anti-Proxy + 15s Reward Timer)
+// ============================================================================
 class InAppAdScreen extends StatefulWidget {
   final String adUrl;
   const InAppAdScreen({super.key, required this.adUrl});
@@ -718,21 +1164,20 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161F30),
-        title: const Text("⚠️ لغو دریافت زمان رایگان؟", textAlign: TextAlign.right, style: TextStyle(color: Colors.amber, fontSize: 17)),
+        title: const Text("⚠️ Cancel Free Reward?", style: TextStyle(color: Colors.amber, fontSize: 17)),
         content: Text(
-          "هنوز $_secondsLeft ثانیه از تماشای تبلیغ باقی مانده است. اگر الان خارج شوید، ۲ ساعت زمان رایگان دریافت نمی‌کنید.",
-          textAlign: TextAlign.right,
+          "Please stay on this sponsor page for $_secondsLeft more seconds to unlock +2 Hours of free VPN access.",
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("خروج بدون جایزه", style: TextStyle(color: Colors.redAccent)),
+            child: const Text("Exit Anyway", style: TextStyle(color: Colors.redAccent)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("ادامه تماشای تبلیغ"),
+            child: const Text("Continue Watching"),
           ),
         ],
       ),
@@ -757,10 +1202,10 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
           ),
           title: Text(
             _hasProxyError
-                ? "⚠️ فیلترشکن دیگر گوشی را خاموش کنید"
+                ? "⚠️ Disable Other VPNs"
                 : (!_adLoaded
-                    ? "⏳ در حال بارگذاری تبلیغ..."
-                    : (_secondsLeft > 0 ? "⏱ $_secondsLeft ثانیه در این صفحه بمانید" : "✅ جایزه آماده دریافت است!")),
+                    ? "⏳ Loading Sponsor Ad..."
+                    : (_secondsLeft > 0 ? "⏱ Wait $_secondsLeft seconds..." : "✅ Reward Unlocked!")),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
           actions: [
@@ -770,7 +1215,7 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text("دریافت +۲ ساعت", style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text("Claim +2 Hours", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
           ],
@@ -793,13 +1238,13 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
                       const Icon(Icons.vpn_lock_rounded, size: 64, color: Colors.amber),
                       const SizedBox(height: 16),
                       const Text(
-                        "خطای تشخیص فیلترشکن (Anonymous Proxy)",
+                        "Anonymous Proxy Detected",
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        "شبکه تبلیغاتی اجازه نمایش تبلیغ با آی‌پی فیلترشکن را نمی‌دهد. لطفاً اگر فیلترشکن دیگری روی گوشی شما روشن است آن را خاموش کنید و دکمه تلاش مجدد را بزنید.",
+                        "Please turn off any background VPN or proxy on your phone and tap Retry so the sponsor page can load.",
                         style: TextStyle(color: Colors.white70, height: 1.5),
                         textAlign: TextAlign.center,
                       ),
@@ -811,7 +1256,7 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
                           _controller.reload();
                         },
                         icon: const Icon(Icons.refresh),
-                        label: const Text("تلاش مجدد با اینترنت عادی"),
+                        label: const Text("Retry"),
                       ),
                     ],
                   ),
