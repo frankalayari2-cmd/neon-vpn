@@ -1,0 +1,118 @@
+name: Auto Update Servers Hourly
+
+on:
+  schedule:
+    - cron: '0 * * * *' # اجرای خودکار در دقیقه صفر هر ساعت
+  workflow_dispatch:    # امکان اجرای دستی با یک کلیک
+
+permissions:
+  contents: write
+
+jobs:
+  update-servers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch, Test Ping & Filter Working Servers
+        run: |
+          python3 - << 'EOF'
+          import urllib.request
+          import base64
+          import socket
+          import time
+          import re
+          from concurrent.futures import ThreadPoolExecutor
+
+          # ۱. نگه داشتن سرورهای دستی که خودتان در فایل servers.txt گذاشته‌اید
+          manual_servers = []
+          try:
+              with open("servers.txt", "r", encoding="utf-8") as f:
+                  for line in f.read().splitlines():
+                      line = line.strip()
+                      if line.startswith(("vless://", "trojan://", "vmess://", "ss://")) and "#Auto-Server" not in line:
+                          manual_servers.append(line)
+          except Exception:
+              pass
+
+          if not manual_servers:
+              manual_servers = [
+                  "trojan://jcTG9WSWMJAmR4rv10xpww@fastly2.dunnexa.ir:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_17i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-1",
+                  "trojan://jcTG9WSWMJAmR4rv10xpww@199.232.78.159:443?type=ws&security=tls&path=%2FTELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER-TELEGRAM-%40NUFiLTER&host=copy_az_channel_NUFiLTER_7i.global.ssl.fastly.net.&sni=cdn.akamai.steamstatic.com#VIP-2",
+              ]
+
+          # ۲. منابع معتبر کانفیگ‌های روزانه (مخصوص پروتکل‌های ضد فیلتر ایران)
+          sources = [
+              "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/reality",
+              "https://raw.githubusercontent.com/yebekhe/TVC/main/subscriptions/xray/normal/mix",
+              "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+              "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub2.txt",
+              "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt",
+          ]
+
+          raw_configs = []
+          for url in sources:
+              try:
+                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                  with urllib.request.urlopen(req, timeout=10) as resp:
+                      content = resp.read().decode('utf-8', errors='ignore').strip()
+                      if "://" not in content:
+                          try:
+                              pad = len(content) % 4
+                              if pad:
+                                  content += '=' * (4 - pad)
+                              content = base64.b64decode(content).decode('utf-8', errors='ignore')
+                          except Exception:
+                              pass
+                      for line in content.splitlines():
+                          line = line.strip()
+                          if line.startswith(("vless://", "trojan://")):
+                              if "security=reality" in line or "type=ws" in line or "type=grpc" in line:
+                                  raw_configs.append(line)
+              except Exception:
+                  continue
+
+          unique_configs = list(dict.fromkeys(raw_configs))[:150]
+
+          # ۳. تست واقعی اتصال (TCP Handshake) برای حذف سرورهای خاموش
+          def check_server(cfg):
+              try:
+                  m = re.search(r'://[^@]+@([^:/?#]+):(\d+)', cfg)
+                  if not m:
+                      return None
+                  host, port = m.group(1), int(m.group(2))
+                  start = time.time()
+                  with socket.create_connection((host, port), timeout=1.5):
+                      ping = int((time.time() - start) * 1000)
+                      if 15 < ping < 800:
+                          base_cfg = cfg.split('#')[0]
+                          return (ping, f"{base_cfg}#Auto-Server ({ping}ms)")
+              except Exception:
+                  return None
+              return None
+
+          working = []
+          with ThreadPoolExecutor(max_workers=30) as executor:
+              for result in executor.map(check_server, unique_configs):
+                  if result:
+                      working.append(result)
+
+          # مرتب‌سازی از سریع‌ترین پینگ و انتخاب ۲۵ سرور برتر
+          working.sort(key=lambda x: x[0])
+          best_auto_servers = [item[1] for item in working[:25]]
+
+          final_list = manual_servers[:10] + best_auto_servers
+          with open("servers.txt", "w", encoding="utf-8") as f:
+              f.write("\n".join(final_list) + "\n")
+
+          print(f"Updated servers.txt with {len(final_list)} active servers!")
+          EOF
+
+      - name: Save Updated Servers to GitHub
+        run: |
+          git config --global user.name "NeonVPN Bot"
+          git config --global user.email "bot@neonvpn.app"
+          git add servers.txt
+          git diff --staged --quiet || git commit -m "Auto-update active servers [skip ci]"
+          git push
