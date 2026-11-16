@@ -1,4 +1,4 @@
-name: Build Android App Bundle for Google Play
+name: Build Signed Google Play Bundle (AAB)
 
 on:
   workflow_dispatch:
@@ -23,10 +23,24 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Modern Android Gradle Structure
+      - name: Recreate Android Structure & Configure Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           rm -rf android
           flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
+          
+          # بازگردانی کلید امضای اختصاصی از Secrets
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+
+          # ساخت فایل key.properties
+          cat << 'EOF' > android/key.properties
+          storePassword=NeonVpn@2026
+          keyPassword=NeonVpn@2026
+          keyAlias=neon_key
+          storeFile=upload-keystore.jks
+          EOF
+
           python3 - << 'EOF'
           # افزودن مجوز اینترنت و جلوگیری از خطای Cleartext در WebView تبلیغات
           manifest_path = "android/app/src/main/AndroidManifest.xml"
@@ -40,12 +54,41 @@ jobs:
           with open(manifest_path, "w") as f:
               f.write(content)
 
-          # تنظیم minSdk روی 21 برای سازگاری با هسته V2Ray و WebView
+          # تنظیم امضای دیجیتال Release در build.gradle
           gradle_path = "android/app/build.gradle"
           with open(gradle_path, "r") as f:
               g_content = f.read()
+
           g_content = g_content.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
           g_content = g_content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+
+          signing_setup = """
+          def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file('key.properties')
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+          android {
+          """
+          g_content = g_content.replace("android {", signing_setup, 1)
+
+          release_signing_config = """
+              signingConfigs {
+                  release {
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                      storePassword keystoreProperties['storePassword']
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+          """
+          g_content = g_content.replace("buildTypes {\n        release {", release_signing_config, 1)
+          g_content = g_content.replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release")
+          g_content = g_content.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
+
           with open(gradle_path, "w") as f:
               f.write(g_content)
           EOF
@@ -53,11 +96,11 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Release App Bundle (AAB)
+      - name: Build Signed Release App Bundle (AAB)
         run: flutter build appbundle --release
 
-      - name: Upload AAB Artifact
+      - name: Upload Signed AAB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: google-play-release-bundle
+          name: neon-vpn-google-play-signed
           path: build/app/outputs/bundle/release/app-release.aab
