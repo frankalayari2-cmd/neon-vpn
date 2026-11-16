@@ -23,6 +23,33 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Recreate Modern Android Gradle Structure
+        run: |
+          rm -rf android
+          flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
+          python3 - << 'EOF'
+          # افزودن مجوز اینترنت و جلوگیری از خطای Cleartext در WebView تبلیغات
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_path, "r") as f:
+              content = f.read()
+          if "android.permission.INTERNET" not in content:
+              content = content.replace(
+                  "<application",
+                  '<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <application android:usesCleartextTraffic="true"'
+              )
+          with open(manifest_path, "w") as f:
+              f.write(content)
+
+          # تنظیم minSdk روی 21 برای سازگاری با هسته V2Ray و WebView
+          gradle_path = "android/app/build.gradle"
+          with open(gradle_path, "r") as f:
+              g_content = f.read()
+          g_content = g_content.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+          g_content = g_content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+          with open(gradle_path, "w") as f:
+              f.write(g_content)
+          EOF
+
       - name: Install Dependencies
         run: flutter pub get
 
