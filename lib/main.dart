@@ -29,11 +29,133 @@ class NeonVpnApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF070A12),
         primaryColor: const Color(0xFF00F5D4),
       ),
-      home: const VpnHomeScreen(),
+      home: const NeonSplashScreen(),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// صفحه اسپلش اسکرین با انیمیشن بالارفتن خطوط بنفش و ساخت کلمه NEON
+// ---------------------------------------------------------------------------
+class NeonSplashScreen extends StatefulWidget {
+  const NeonSplashScreen({super.key});
+
+  @override
+  State<NeonSplashScreen> createState() => _NeonSplashScreenState();
+}
+
+class _NeonSplashScreenState extends State<NeonSplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animUp;
+  late Animation<double> _animGlow;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+
+    _animUp = Tween<double>(begin: 120.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+
+    _animGlow = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.5, 1.0, curve: Curves.easeIn)),
+    );
+
+    _controller.forward();
+
+    Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const VpnHomeScreen(),
+            transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+            transitionDuration: const Duration(milliseconds: 600),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF070A12),
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, _animUp.value),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF9B5DE5).withOpacity(_animGlow.value * 0.7),
+                          blurRadius: 40,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.shield_moon_rounded, size: 68, color: Color(0xFF9B5DE5)),
+                  ),
+                  const SizedBox(height: 16),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        const Color(0xFF9B5DE5),
+                        const Color(0xFFC77DFF),
+                        Colors.white.withOpacity(_animGlow.value.clamp(0.2, 1.0)),
+                      ],
+                    ).createShader(bounds),
+                    child: const Text(
+                      "NEON",
+                      style: TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 8,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "SECURE TUNNEL",
+                    style: TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 4,
+                      color: Colors.white.withOpacity(_animGlow.value * 0.7),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// صفحه اصلی اپلیکیشن VPN
+// ---------------------------------------------------------------------------
 class VpnHomeScreen extends StatefulWidget {
   const VpnHomeScreen({super.key});
 
@@ -44,15 +166,12 @@ class VpnHomeScreen extends StatefulWidget {
 class _VpnHomeScreenState extends State<VpnHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Your Adsterra Direct Link:
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // Auto-synced GitHub server list + CDN mirrors:
   final List<String> myGithubServerUrls = [
     "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
     "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/refs/heads/main/servers.txt",
     "https://gcore.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
-    "https://testingcf.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
     "https://fastly.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
   ];
 
@@ -71,7 +190,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isUpdatingServers = false;
-  int _remainingSeconds = 3600;
+  int _remainingSeconds = 1800; // پیش‌فرض ۳۰ دقیقه
   Timer? _usageTimer;
   Timer? _autoRefreshTimer;
   int _ping = 0;
@@ -81,10 +200,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     "com.neonvpn.app",
     "ir.divar",
     "cab.snapp.passenger",
-    "com.sibche.aspardproject.app",
     "ir.nasim",
     "ir.eitaa.messenger",
-    "ir.resaneh1.iptv",
   ];
 
   @override
@@ -115,8 +232,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   Future<void> _loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _remainingSeconds = prefs.getInt('remaining_seconds') ?? 3600;
-      final savedAll = prefs.getStringList('auto_cf_servers_v8');
+      _remainingSeconds = prefs.getInt('remaining_seconds_v3') ?? 1800;
+      final savedAll = prefs.getStringList('auto_cf_servers_v9');
       if (savedAll != null && savedAll.isNotEmpty) {
         _serverList = savedAll;
       }
@@ -125,7 +242,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
   Future<void> _saveRemainingTime() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('remaining_seconds', _remainingSeconds);
+    await prefs.setInt('remaining_seconds_v3', _remainingSeconds);
   }
 
   List<String> _extractAndCleanConfigs(String rawInput) {
@@ -190,7 +307,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     if (_isUpdatingServers) return;
     setState(() {
       _isUpdatingServers = true;
-      _statusSubtext = "Syncing cloud servers...";
+      _statusSubtext = "Syncing cloud nodes...";
     });
 
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -220,11 +337,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         _serverList = fetchedServers;
         _selectedServerIndex = 0;
         _isUpdatingServers = false;
-        _statusSubtext = "${fetchedServers.length} High-Speed Servers Ready";
+        _statusSubtext = "${fetchedServers.length} Fast Nodes Ready";
       });
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('auto_cf_servers_v8', fetchedServers);
+      await prefs.setStringList('auto_cf_servers_v9', fetchedServers);
 
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -238,8 +355,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       setState(() {
         _isUpdatingServers = false;
         _statusSubtext = _serverList.isNotEmpty
-            ? "${_serverList.length} Cached Servers Ready"
-            : "Tap sync icon to load servers";
+            ? "${_serverList.length} Cached Nodes Ready"
+            : "Tap sync icon to load nodes";
       });
     }
   }
@@ -287,7 +404,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     for (int i = 0; i < maxChecks; i++) {
       final int candidateIndex = (_selectedServerIndex + i) % _serverList.length;
       setState(() {
-        _statusSubtext = "Testing Server #${candidateIndex + 1}...";
+        _statusSubtext = "Testing Node #${candidateIndex + 1}...";
       });
 
       try {
@@ -322,8 +439,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         _isConnected = true;
         _isConnecting = false;
         _statusSubtext = verifiedPing > 0
-            ? "Server #${workingIndex + 1} • $verifiedPing ms"
-            : "Server #${workingIndex + 1} Active";
+            ? "Node #${workingIndex + 1} • $verifiedPing ms"
+            : "Node #${workingIndex + 1} Active";
       });
       _startCountdown();
     } catch (e) {
@@ -372,15 +489,15 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
     if (rewarded == true) {
       setState(() {
-        _remainingSeconds += 7200;
-        _statusSubtext = "+2 Hours Free Time Added!";
+        _remainingSeconds += 1800; // افزودن دقیقاً ۳۰ دقیقه (۱۸۰۰ ثانیه)
+        _statusSubtext = "+30 Mins Free Time Added!";
       });
       await _saveRemainingTime();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.green,
-            content: Text("🎉 +2 Hours added to your free session!"),
+            content: Text("🎉 +30 Mins added to your free session!"),
           ),
         );
       }
@@ -427,7 +544,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  "Select High-Speed Server",
+                  "Select High-Speed Node",
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4)),
                 ),
               ),
@@ -435,7 +552,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                 child: _serverList.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.all(24.0),
-                        child: Text("Loading servers..."),
+                        child: Text("Loading nodes..."),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
@@ -449,7 +566,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                               size: 28,
                             ),
                             title: Text(
-                              "Neon Cloud Server #${index + 1}",
+                              "Neon Cloud Node #${index + 1}",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: isSelected ? const Color(0xFF00F5D4) : Colors.white,
@@ -478,47 +595,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     );
   }
 
-  void _showCustomConfigDialog() {
-    final TextEditingController controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
-        title: const Text("Import Custom Config", style: TextStyle(fontSize: 16, color: Color(0xFF00F5D4))),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: "Paste vless://, trojan:// or Base64 subscription...",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
-            onPressed: () async {
-              final extracted = _extractAndCleanConfigs(controller.text);
-              if (extracted.isNotEmpty) {
-                setState(() {
-                  _serverList = [...extracted, ..._serverList];
-                  _selectedServerIndex = 0;
-                });
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setStringList('auto_cf_servers_v8', _serverList);
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text("Import"),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showInfoDialog(String title, String content) {
     showDialog(
       context: context,
@@ -544,7 +620,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     return "$hours:$minutes:$seconds";
   }
 
-  // Parallel Neon Lines Widget (Off when disconnected, Glowing Neon when connected)
   Widget _buildParallelNeonBars({required bool isLeft}) {
     final List<double> widths = isLeft ? [26, 42, 58, 42, 26] : [26, 42, 58, 42, 26];
 
@@ -579,7 +654,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     );
   }
 
-  // Horizontal Parallel Neon Lines across the panel
   Widget _buildHorizontalParallelLines() {
     return Column(
       children: List.generate(3, (index) {
@@ -638,7 +712,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top Curved Header + Overlapping Central Button (Gozal VPN Layout)
                 Stack(
                   alignment: Alignment.bottomCenter,
                   clipBehavior: Clip.none,
@@ -668,7 +741,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                       ),
                       child: Column(
                         children: [
-                          // Top Bar (4-Square Menu Icon + Sync Button)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 14.0),
                             child: Row(
@@ -686,7 +758,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                   ),
                                 ),
                                 IconButton(
-                                  tooltip: "Sync Servers",
+                                  tooltip: "Sync Nodes",
                                   icon: _isUpdatingServers
                                       ? const SizedBox(
                                           width: 18,
@@ -699,7 +771,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                               ],
                             ),
                           ),
-                          // App Logo & Neon Title
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -739,8 +810,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                         ],
                       ),
                     ),
-
-                    // Central Button + Left & Right Parallel Neon Lines
                     Positioned(
                       bottom: 0,
                       child: Row(
@@ -806,11 +875,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     ),
                   ],
                 ),
-
-                // Horizontal Parallel Neon Lines (Off before connection, Glowing when connected)
                 _buildHorizontalParallelLines(),
-
-                // Connection Status Text
                 Column(
                   children: [
                     Text(
@@ -828,8 +893,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     ),
                   ],
                 ),
-
-                // "Connect To Server" Selector Row (Matching Screenshot 1)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22.0),
                   child: InkWell(
@@ -861,8 +924,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                           ),
                           Text(
                             _serverList.isEmpty
-                                ? "Connect To Server"
-                                : "Connect To Server (#${_selectedServerIndex + 1})",
+                                ? "Connect To Node"
+                                : "Connect To Node (#${_selectedServerIndex + 1})",
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -882,8 +945,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     ),
                   ),
                 ),
-
-                // Free Session Timer + Reward Ad Button
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
                   child: Container(
@@ -916,7 +977,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                           ),
                           onPressed: _openInAppAdScreen,
                           icon: const Icon(Icons.play_circle_fill_rounded, size: 18),
-                          label: const Text("Add +2 Hours", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          label: const Text("Add +30 Mins", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                       ],
                     ),
@@ -930,7 +991,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     );
   }
 
-  // Side Drawer Menu (Matching Screenshot 2 in Neon Style)
   Widget _buildNeonDrawer() {
     return Drawer(
       backgroundColor: const Color(0xFF0E1422),
@@ -942,7 +1002,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       ),
       child: Column(
         children: [
-          // Curved Top Header inside Drawer
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 55, bottom: 35),
@@ -1029,7 +1088,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   backgroundColor: Color(0xFF00B4D8),
-                  content: Text("✅ Share link copied to clipboard! Send it to your friends."),
+                  content: Text("✅ Share link copied to clipboard!"),
                 ),
               );
             },
@@ -1041,17 +1100,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               Navigator.pop(context);
               _showInfoDialog(
                 "About Neon VPN",
-                "Version 2.0.0 (Global Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
+                "Version 2.1.0 (Google Play Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
               );
-            },
-          ),
-          const Divider(color: Colors.white12, height: 32, indent: 24, endIndent: 24),
-          _buildDrawerItem(
-            icon: Icons.paste_rounded,
-            title: "Import Custom Config",
-            onTap: () {
-              Navigator.pop(context);
-              _showCustomConfigDialog();
             },
           ),
         ],
@@ -1080,9 +1130,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   }
 }
 
-// ============================================================================
-// In-App Sponsor Ad Screen (English UI + Anti-Proxy + 15s Reward Timer)
-// ============================================================================
 class InAppAdScreen extends StatefulWidget {
   final String adUrl;
   const InAppAdScreen({super.key, required this.adUrl});
@@ -1166,7 +1213,7 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
         backgroundColor: const Color(0xFF161F30),
         title: const Text("⚠️ Cancel Free Reward?", style: TextStyle(color: Colors.amber, fontSize: 17)),
         content: Text(
-          "Please stay on this sponsor page for $_secondsLeft more seconds to unlock +2 Hours of free VPN access.",
+          "Please stay on this sponsor page for $_secondsLeft more seconds to unlock +30 minutes of free VPN access.",
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -1215,7 +1262,7 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text("Claim +2 Hours", style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text("Claim +30 Mins", style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
           ],
@@ -1251,10 +1298,7 @@ class _InAppAdScreenState extends State<InAppAdScreen> {
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
-                        onPressed: () {
-                          setState(() => _hasProxyError = false);
-                          _controller.reload();
-                        },
+                        onPressed: () => _controller.reload(),
                         icon: const Icon(Icons.refresh),
                         label: const Text("Retry"),
                       ),
