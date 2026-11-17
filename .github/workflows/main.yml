@@ -30,6 +30,13 @@ jobs:
       - name: Install Dependencies & Build APK
         run: |
           flutter pub get
+          - name: Apply Custom Neon Logo
+        run: |
+          if [ -f "assets/logo.png" ]; then
+            for dir in android/app/src/main/res/mipmap-*; do
+              cp assets/logo.png "$dir/ic_launcher.png"
+            done
+          fi
           flutter build apk --release
 
       - name: Upload Ready APK
