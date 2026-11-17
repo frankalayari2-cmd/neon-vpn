@@ -22,3 +22,12 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+dev_dependencies:
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/logo_clean.png"
+  adaptive_icon_background: "#070A12"
+  adaptive_icon_foreground: "assets/logo_clean.png"
