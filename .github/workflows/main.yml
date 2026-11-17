@@ -23,12 +23,22 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Clean Android Structure
+      - name: Recreate Clean Android Structure & Generate Real PNG Icon
         run: |
           rm -rf android
           flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
 
+          pip install pillow
           python3 - << 'EOF'
+          import os
+          from PIL import Image
+
+          # تبدیل تصویر به فرمت استاندارد RGBA PNG برای جلوگیری از خطای AAPT2
+          if os.path.exists("assets/logo.png"):
+              img = Image.open("assets/logo.png").convert("RGBA")
+              img = img.resize((512, 512), Image.Resampling.LANCZOS)
+              img.save("assets/logo_clean.png", format="PNG")
+
           manifest_path = "android/app/src/main/AndroidManifest.xml"
           with open(manifest_path, "r") as f:
               content = f.read()
@@ -49,8 +59,10 @@ jobs:
               f.write(g_content)
           EOF
 
-      - name: Install Dependencies
-        run: flutter pub get
+      - name: Install Dependencies & Apply Launcher Icons
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
 
       - name: Build Release APK
         run: flutter build apk --release
