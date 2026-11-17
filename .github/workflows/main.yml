@@ -1,46 +1,69 @@
-
-name: Build VPN APK
+name: Build Android APK (Direct Phone Install)
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          flutter-version: '3.19.0'
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
           channel: 'stable'
+          cache: true
 
-      - name: Prepare Android Project & V2Ray Native Libs
+      - name: Recreate Android Structure & Apply Neon Logo
         run: |
-          cp pubspec.yaml pubspec.bak
-          cp lib/main.dart main.bak
-          flutter create --org com.neonvpn.app --project-name neon_vpn .
-          mv pubspec.bak pubspec.yaml
-          mv main.bak lib/main.dart
-          sed -i 's/minSdkVersion .*/minSdkVersion 21/g' android/app/build.gradle
-          sed -i 's/<application/<application android:extractNativeLibs="true"/g' android/app/src/main/AndroidManifest.xml
-
-      - name: Install Dependencies & Build APK
-        run: |
-          flutter pub get
-          - name: Apply Custom Neon Logo
-        run: |
+          rm -rf android
+          flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
+          
+          # جایگزینی خودکار لوگوی جدید روی آیکون برنامه اندروید
           if [ -f "assets/logo.png" ]; then
             for dir in android/app/src/main/res/mipmap-*; do
               cp assets/logo.png "$dir/ic_launcher.png"
             done
           fi
-          flutter build apk --release
 
-      - name: Upload Ready APK
+          python3 - << 'EOF'
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_path, "r") as f:
+              content = f.read()
+          if "android.permission.INTERNET" not in content:
+              content = content.replace(
+                  "<application",
+                  '<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <application android:usesCleartextTraffic="true"'
+              )
+          with open(manifest_path, "w") as f:
+              f.write(content)
+
+          gradle_path = "android/app/build.gradle"
+          with open(gradle_path, "r") as f:
+              g_content = f.read()
+          g_content = g_content.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
+          g_content = g_content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+          with open(gradle_path, "w") as f:
+              f.write(g_content)
+          EOF
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NeonVPN-Android-APK
+          name: neon-vpn-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
