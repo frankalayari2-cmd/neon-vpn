@@ -23,17 +23,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Structure & Configure Signing
+      - name: Recreate Android Structure, Icon & Signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           rm -rf android
           flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
           
-          # بازگردانی کلید امضای اختصاصی از Secrets
           echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
 
-          # ساخت فایل key.properties
           cat << 'EOF' > android/key.properties
           storePassword=NeonVpn@2026
           keyPassword=NeonVpn@2026
@@ -41,8 +39,16 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
+          pip install pillow
           python3 - << 'EOF'
-          # افزودن مجوز اینترنت و جلوگیری از خطای Cleartext در WebView تبلیغات
+          import os
+          from PIL import Image
+
+          if os.path.exists("assets/logo.png"):
+              img = Image.open("assets/logo.png").convert("RGBA")
+              img = img.resize((512, 512), Image.Resampling.LANCZOS)
+              img.save("assets/logo_clean.png", format="PNG")
+
           manifest_path = "android/app/src/main/AndroidManifest.xml"
           with open(manifest_path, "r") as f:
               content = f.read()
@@ -54,7 +60,6 @@ jobs:
           with open(manifest_path, "w") as f:
               f.write(content)
 
-          # تنظیم امضای دیجیتال Release در build.gradle
           gradle_path = "android/app/build.gradle"
           with open(gradle_path, "r") as f:
               g_content = f.read()
@@ -93,8 +98,10 @@ jobs:
               f.write(g_content)
           EOF
 
-      - name: Install Dependencies
-        run: flutter pub get
+      - name: Install Dependencies & Apply Launcher Icons
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
 
       - name: Build Signed Release App Bundle (AAB)
         run: flutter build appbundle --release
