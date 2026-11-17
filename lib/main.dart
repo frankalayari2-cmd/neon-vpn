@@ -34,9 +34,6 @@ class NeonVpnApp extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// صفحه اسپلش اسکرین با انیمیشن بالارفتن خطوط بنفش و ساخت کلمه NEON
-// ---------------------------------------------------------------------------
 class NeonSplashScreen extends StatefulWidget {
   const NeonSplashScreen({super.key});
 
@@ -153,9 +150,6 @@ class _NeonSplashScreenState extends State<NeonSplashScreen> with SingleTickerPr
   }
 }
 
-// ---------------------------------------------------------------------------
-// صفحه اصلی اپلیکیشن VPN
-// ---------------------------------------------------------------------------
 class VpnHomeScreen extends StatefulWidget {
   const VpnHomeScreen({super.key});
 
@@ -190,11 +184,16 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isUpdatingServers = false;
-  int _remainingSeconds = 1800; // پیش‌فرض ۳۰ دقیقه
+  int _remainingSeconds = 1800;
   Timer? _usageTimer;
   Timer? _autoRefreshTimer;
   int _ping = 0;
   String _statusSubtext = "Ready to connect";
+
+  // متغیرهای جدید نمایش IP و لوکیشن متصل‌شده
+  String _connectedIp = "---.---.---.---";
+  String _connectedLocation = "Location Hidden";
+  bool _isFetchingIpInfo = false;
 
   final List<String> _bypassApps = [
     "com.neonvpn.app",
@@ -243,6 +242,72 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   Future<void> _saveRemainingTime() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('remaining_seconds_v3', _remainingSeconds);
+  }
+
+  // استعلام IP و لوکیشن سرور متصل‌شده از داخل تونل VPN
+  Future<void> _fetchConnectedIpAndLocation() async {
+    if (!_isConnected) return;
+    setState(() {
+      _isFetchingIpInfo = true;
+      _connectedIp = "Detecting IP...";
+      _connectedLocation = "Locating Server...";
+    });
+
+    await Future.delayed(const Duration(milliseconds: 1200));
+
+    final List<String> geoApis = [
+      "https://ipwho.is/",
+      "https://ipapi.co/json/",
+    ];
+
+    for (final apiUrl in geoApis) {
+      try {
+        final response = await http.get(Uri.parse(apiUrl)).timeout(const Duration(seconds: 6));
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = jsonDecode(response.body);
+          final String ip = (data['ip'] ?? "").toString();
+          final String country = (data['country'] ?? data['country_name'] ?? "").toString();
+          final String city = (data['city'] ?? "").toString();
+          final String code = (data['country_code'] ?? "").toString();
+
+          if (ip.isNotEmpty && mounted && _isConnected) {
+            final String flag = _countryCodeToEmoji(code);
+            setState(() {
+              _connectedIp = ip;
+              _connectedLocation = city.isNotEmpty ? "$flag $country, $city" : "$flag $country";
+              _isFetchingIpInfo = false;
+            });
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (mounted && _isConnected) {
+      // استخراج IP/هاست مستقیم از کانفیگ در صورت مسدود بودن API استعلام
+      final String fallbackHost = _extractHostFromConfig(_serverList[_selectedServerIndex]);
+      setState(() {
+        _connectedIp = fallbackHost;
+        _connectedLocation = "🌐 Encrypted Cloud Node";
+        _isFetchingIpInfo = false;
+      });
+    }
+  }
+
+  String _extractHostFromConfig(String configUrl) {
+    try {
+      final afterAt = configUrl.split('@').last;
+      return afterAt.split(':').first;
+    } catch (_) {
+      return "Protected IP";
+    }
+  }
+
+  String _countryCodeToEmoji(String countryCode) {
+    if (countryCode.length != 2) return "🌐";
+    final int firstLetter = countryCode.toUpperCase().codeUnitAt(0) - 0x41 + 0x1F1E6;
+    final int secondLetter = countryCode.toUpperCase().codeUnitAt(1) - 0x41 + 0x1F1E6;
+    return String.fromCharCode(firstLetter) + String.fromCharCode(secondLetter);
   }
 
   List<String> _extractAndCleanConfigs(String rawInput) {
@@ -368,6 +433,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       setState(() {
         _isConnected = false;
         _ping = 0;
+        _connectedIp = "---.---.---.---";
+        _connectedLocation = "Location Hidden";
         _statusSubtext = "Disconnected";
       });
       return;
@@ -443,6 +510,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
             : "Node #${workingIndex + 1} Active";
       });
       _startCountdown();
+      _fetchConnectedIpAndLocation();
     } catch (e) {
       setState(() {
         _isConnecting = false;
@@ -461,7 +529,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       } else {
         _flutterV2ray.stopV2Ray();
         timer.cancel();
-        setState(() => _isConnected = false);
+        setState(() {
+          _isConnected = false;
+          _connectedIp = "---.---.---.---";
+          _connectedLocation = "Location Hidden";
+        });
         _saveRemainingTime();
         _openInAppAdScreen();
       }
@@ -474,6 +546,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       _usageTimer?.cancel();
       setState(() {
         _isConnected = false;
+        _connectedIp = "---.---.---.---";
+        _connectedLocation = "Location Hidden";
         _statusSubtext = "Paused for sponsor ad...";
       });
     }
@@ -489,7 +563,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
     if (rewarded == true) {
       setState(() {
-        _remainingSeconds += 1800; // افزودن دقیقاً ۳۰ دقیقه (۱۸۰۰ ثانیه)
+        _remainingSeconds += 1800;
         _statusSubtext = "+30 Mins Free Time Added!";
       });
       await _saveRemainingTime();
@@ -572,7 +646,10 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                 color: isSelected ? const Color(0xFF00F5D4) : Colors.white,
                               ),
                             ),
-                            subtitle: const Text("Optimized VLESS / TLS", style: TextStyle(fontSize: 12, color: Colors.white54)),
+                            subtitle: Text(
+                              "Host: ${_extractHostFromConfig(_serverList[index])}",
+                              style: const TextStyle(fontSize: 12, color: Colors.white54),
+                            ),
                             trailing: isSelected
                                 ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00F5D4))
                                 : const Icon(Icons.chevron_right_rounded, color: Colors.white38),
@@ -664,7 +741,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
         return AnimatedContainer(
           duration: Duration(milliseconds: 350 + (index * 100)),
-          margin: const EdgeInsets.symmetric(vertical: 3.5),
+          margin: const EdgeInsets.symmetric(vertical: 3.0),
           height: 3,
           width: MediaQuery.of(context).size.width * widthFactor,
           decoration: BoxDecoration(
@@ -692,7 +769,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       drawer: _buildNeonDrawer(),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 10.0),
+          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF0E1422),
@@ -718,8 +795,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   children: [
                     Container(
                       width: double.infinity,
-                      height: 250,
-                      margin: const EdgeInsets.only(bottom: 75),
+                      height: 235,
+                      margin: const EdgeInsets.only(bottom: 70),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           begin: Alignment.topLeft,
@@ -742,7 +819,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                       child: Column(
                         children: [
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 14.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -772,7 +849,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: const Color(0xFF0E1422),
@@ -789,10 +866,10 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                               shaderCallback: (bounds) => const LinearGradient(
                                 colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
                               ).createShader(bounds),
-                              child: const Icon(Icons.shield_moon_rounded, size: 42, color: Colors.white),
+                              child: const Icon(Icons.shield_moon_rounded, size: 38, color: Colors.white),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           ShaderMask(
                             shaderCallback: (bounds) => const LinearGradient(
                               colors: [Color(0xFF00F5D4), Color(0xFF00BBF9), Color(0xFF9B5DE5)],
@@ -800,7 +877,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             child: const Text(
                               "Neon VPN",
                               style: TextStyle(
-                                fontSize: 24,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.5,
                                 color: Colors.white,
@@ -821,8 +898,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             onTap: _isConnecting ? null : _toggleVpn,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 350),
-                              width: 156,
-                              height: 156,
+                              width: 148,
+                              height: 148,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: const Color(0xFF0B0F19),
@@ -847,7 +924,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                 children: [
                                   Icon(
                                     Icons.bolt_rounded,
-                                    size: 64,
+                                    size: 58,
                                     color: _isConnected
                                         ? const Color(0xFF00F5D4)
                                         : (_isConnecting ? Colors.amber : Colors.white70),
@@ -858,7 +935,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                         ? "WAIT..."
                                         : (_isConnected ? "CONNECTED" : "LET'S GO"),
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 1.2,
                                       color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
@@ -875,31 +952,90 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     ),
                   ],
                 ),
+
                 _buildHorizontalParallelLines(),
+
+                // وضعیت اتصال + نمایش زنده IP و موقعیت جغرافیایی سرور
                 Column(
                   children: [
                     Text(
                       _isConnected ? "Connected" : (_isConnecting ? "Connecting..." : "Not Connected"),
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
                         color: _isConnected ? const Color(0xFF00F5D4) : Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       _statusSubtext,
-                      style: const TextStyle(fontSize: 12, color: Colors.white54),
+                      style: const TextStyle(fontSize: 11, color: Colors.white54),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 22),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0B101D),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _isConnected ? const Color(0xFF00BBF9).withOpacity(0.5) : Colors.white10,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.public_rounded,
+                                size: 16,
+                                color: _isConnected ? const Color(0xFF00F5D4) : Colors.white38,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _connectedLocation,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _isConnected ? Colors.white : Colors.white54,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              if (_isFetchingIpInfo)
+                                const SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF00F5D4)),
+                                )
+                              else
+                                Text(
+                                  _connectedIp,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'monospace',
+                                    color: _isConnected ? const Color(0xFF00F5D4) : Colors.white38,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22.0),
                   child: InkWell(
                     onTap: _showServerPickerModal,
                     borderRadius: BorderRadius.circular(18),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFF141D30),
                         borderRadius: BorderRadius.circular(18),
@@ -911,7 +1047,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _isConnected ? const Color(0xFF00F5D4).withOpacity(0.2) : Colors.white10,
@@ -919,7 +1055,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             child: Icon(
                               Icons.outlined_flag_rounded,
                               color: _isConnected ? const Color(0xFF00F5D4) : Colors.white70,
-                              size: 20,
+                              size: 18,
                             ),
                           ),
                           Text(
@@ -927,7 +1063,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                 ? "Connect To Node"
                                 : "Connect To Node (#${_selectedServerIndex + 1})",
                             style: const TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -945,10 +1081,11 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                     ),
                   ),
                 ),
+
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: const Color(0xFF131B2E),
                       borderRadius: BorderRadius.circular(20),
@@ -964,7 +1101,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                             const SizedBox(height: 2),
                             Text(
                               _formatTime(_remainingSeconds),
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
                             ),
                           ],
                         ),
@@ -1100,7 +1237,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               Navigator.pop(context);
               _showInfoDialog(
                 "About Neon VPN",
-                "Version 2.1.0 (Google Play Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
+                "Version 2.2.0 (Google Play Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
               );
             },
           ),
