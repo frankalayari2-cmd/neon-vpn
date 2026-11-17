@@ -23,17 +23,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Structure & Apply Neon Logo
+      - name: Recreate Clean Android Structure
         run: |
           rm -rf android
           flutter create --platforms=android --org com.neonvpn --project-name neon_vpn .
-          
-          # جایگزینی خودکار لوگوی جدید روی آیکون برنامه اندروید
-          if [ -f "assets/logo.png" ]; then
-            for dir in android/app/src/main/res/mipmap-*; do
-              cp assets/logo.png "$dir/ic_launcher.png"
-            done
-          fi
 
           python3 - << 'EOF'
           manifest_path = "android/app/src/main/AndroidManifest.xml"
