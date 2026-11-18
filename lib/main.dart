@@ -162,7 +162,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
-  // اولویت با شبکه‌های CDN جهانی (ضدبن گیت‌هاب و مقاوم در برابر فیلترینگ)
   final List<String> myGithubServerUrls = [
     "https://gcore.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
     "https://fastly.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
@@ -268,7 +267,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
-  // وارد کردن کانفیگ اضطراری از کلیپ‌بورد در زمان قطعی سراسری اینترنت
   Future<void> _importEmergencyConfigFromClipboard() async {
     final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
     final String rawText = data?.text?.trim() ?? "";
@@ -411,7 +409,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     return validConfigs;
   }
 
-  // ساخت کانفیگ هسته Xray با قابلیت TLS Fragment برای عبور از اختلالات شدید اینترنت
   String _buildUnlockedConfigJson(String rawConfigUrl, {required bool useFragment}) {
     final V2RayURL parser = FlutterV2ray.parseFromURL(rawConfigUrl);
     final String rawJson = parser.getFullConfiguration();
@@ -469,7 +466,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
-  // همگام‌سازی سرورها با باکت کش ۳۰ دقیقه‌ای (جلوگیری ۱۰۰٪ از بن شدن گیت‌هاب)
   Future<void> _syncServersFromGithub({bool silent = false}) async {
     if (_isUpdatingServers) return;
     setState(() {
@@ -477,7 +473,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       _statusSubtext = "Syncing cloud nodes...";
     });
 
-    // تغییر کلید کش فقط هر ۳۰ دقیقه یک‌بار تا تمام کاربران از کش CDN بخوانند
     final int halfHourBucket = DateTime.now().millisecondsSinceEpoch ~/ (1000 * 60 * 30);
     List<String> fetchedServers = [];
 
@@ -1334,7 +1329,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
             onTap: () => Navigator.pop(context),
           ),
           _buildDrawerItem(
-            icon: Icons.security_Update_good_rounded,
+            icon: Icons.security_update_good_rounded,
             title: _fragmentEnabled ? "TLS Fragment: ON (Anti-DPI)" : "TLS Fragment: OFF",
             onTap: () {
               Navigator.pop(context);
