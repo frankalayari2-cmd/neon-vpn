@@ -162,11 +162,13 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
   final String adDirectLink = "https://asiafilm.org/4/052064ca4ffd0916d363a8d4ca962a64";
 
+  // اولویت با شبکه‌های CDN جهانی (ضدبن گیت‌هاب و مقاوم در برابر فیلترینگ)
   final List<String> myGithubServerUrls = [
-    "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
-    "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/refs/heads/main/servers.txt",
     "https://gcore.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
     "https://fastly.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
+    "https://cdn.jsdelivr.net/gh/frankalayari2-cmd/neon-vpn@main/servers.txt",
+    "https://frankalayari2-cmd.github.io/neon-vpn/servers.txt",
+    "https://raw.githubusercontent.com/frankalayari2-cmd/neon-vpn/main/servers.txt",
   ];
 
   List<String> _serverList = [];
@@ -184,13 +186,13 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _isUpdatingServers = false;
+  bool _fragmentEnabled = true;
   int _remainingSeconds = 1800;
   Timer? _usageTimer;
   Timer? _autoRefreshTimer;
   int _ping = 0;
   String _statusSubtext = "Ready to connect";
 
-  // متغیرهای جدید نمایش IP و لوکیشن متصل‌شده
   String _connectedIp = "---.---.---.---";
   String _connectedLocation = "Location Hidden";
   bool _isFetchingIpInfo = false;
@@ -232,6 +234,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _remainingSeconds = prefs.getInt('remaining_seconds_v3') ?? 1800;
+      _fragmentEnabled = prefs.getBool('fragment_enabled_v1') ?? true;
       final savedAll = prefs.getStringList('auto_cf_servers_v9');
       if (savedAll != null && savedAll.isNotEmpty) {
         _serverList = savedAll;
@@ -244,7 +247,77 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     await prefs.setInt('remaining_seconds_v3', _remainingSeconds);
   }
 
-  // استعلام IP و لوکیشن سرور متصل‌شده از داخل تونل VPN
+  Future<void> _toggleFragmentMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _fragmentEnabled = !_fragmentEnabled;
+    });
+    await prefs.setBool('fragment_enabled_v1', _fragmentEnabled);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF141E33),
+          content: Text(
+            _fragmentEnabled
+                ? "🛡️ Anti-Censorship TLS Fragment: ON"
+                : "⚡ Standard Direct Mode: ON",
+            style: const TextStyle(color: Color(0xFF00F5D4)),
+          ),
+        ),
+      );
+    }
+  }
+
+  // وارد کردن کانفیگ اضطراری از کلیپ‌بورد در زمان قطعی سراسری اینترنت
+  Future<void> _importEmergencyConfigFromClipboard() async {
+    final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+    final String rawText = data?.text?.trim() ?? "";
+
+    if (rawText.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text("⚠️ Clipboard is empty. Copy a V2Ray config first."),
+          ),
+        );
+      }
+      return;
+    }
+
+    final List<String> extracted = _extractAndCleanConfigs(rawText);
+    if (extracted.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text("⚠️ No valid VLESS/VMess/Trojan/SS config found in clipboard."),
+          ),
+        );
+      }
+      return;
+    }
+
+    final List<String> updatedList = [...extracted, ..._serverList];
+    setState(() {
+      _serverList = updatedList;
+      _selectedServerIndex = 0;
+      _statusSubtext = "Added ${extracted.length} Emergency Node(s)";
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('auto_cf_servers_v9', updatedList);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF00B4D8),
+          content: Text("✅ Imported ${extracted.length} emergency node(s) from clipboard!"),
+        ),
+      );
+    }
+  }
+
   Future<void> _fetchConnectedIpAndLocation() async {
     if (!_isConnected) return;
     setState(() {
@@ -284,7 +357,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
 
     if (mounted && _isConnected) {
-      // استخراج IP/هاست مستقیم از کانفیگ در صورت مسدود بودن API استعلام
       final String fallbackHost = _extractHostFromConfig(_serverList[_selectedServerIndex]);
       setState(() {
         _connectedIp = fallbackHost;
@@ -339,7 +411,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     return validConfigs;
   }
 
-  String _buildUnlockedConfigJson(String rawConfigUrl) {
+  // ساخت کانفیگ هسته Xray با قابلیت TLS Fragment برای عبور از اختلالات شدید اینترنت
+  String _buildUnlockedConfigJson(String rawConfigUrl, {required bool useFragment}) {
     final V2RayURL parser = FlutterV2ray.parseFromURL(rawConfigUrl);
     final String rawJson = parser.getFullConfiguration();
 
@@ -350,15 +423,43 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       };
 
       if (config['outbounds'] is List && (config['outbounds'] as List).isNotEmpty) {
-        for (var outbound in config['outbounds']) {
-          if (outbound is Map && outbound['streamSettings'] is Map) {
-            final stream = outbound['streamSettings'];
-            if (stream['tlsSettings'] is Map) {
-              stream['tlsSettings']['allowInsecure'] = true;
-            }
-            if (stream['sockopt'] == null) {
-              stream['sockopt'] = {"tcpFastOpen": true};
-            }
+        final List<dynamic> outbounds = config['outbounds'] as List<dynamic>;
+        final mainOutbound = outbounds[0];
+
+        if (mainOutbound is Map) {
+          mainOutbound['streamSettings'] ??= <String, dynamic>{};
+          final stream = mainOutbound['streamSettings'] as Map;
+
+          if (stream['tlsSettings'] is Map) {
+            stream['tlsSettings']['allowInsecure'] = true;
+          }
+
+          if (useFragment) {
+            stream['sockopt'] = {
+              "tcpFastOpen": true,
+              "dialerProxy": "fragment",
+            };
+
+            outbounds.add({
+              "tag": "fragment",
+              "protocol": "freedom",
+              "settings": {
+                "domainStrategy": "AsIs",
+                "fragment": {
+                  "packets": "tlshello",
+                  "length": "10-20",
+                  "interval": "10-20"
+                }
+              },
+              "streamSettings": {
+                "sockopt": {
+                  "tcpFastOpen": true,
+                  "tcpNoDelay": true
+                }
+              }
+            });
+          } else {
+            stream['sockopt'] ??= {"tcpFastOpen": true};
           }
         }
       }
@@ -368,6 +469,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
   }
 
+  // همگام‌سازی سرورها با باکت کش ۳۰ دقیقه‌ای (جلوگیری ۱۰۰٪ از بن شدن گیت‌هاب)
   Future<void> _syncServersFromGithub({bool silent = false}) async {
     if (_isUpdatingServers) return;
     setState(() {
@@ -375,14 +477,14 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       _statusSubtext = "Syncing cloud nodes...";
     });
 
-    final int timestamp = DateTime.now().millisecondsSinceEpoch;
+    // تغییر کلید کش فقط هر ۳۰ دقیقه یک‌بار تا تمام کاربران از کش CDN بخوانند
+    final int halfHourBucket = DateTime.now().millisecondsSinceEpoch ~/ (1000 * 60 * 30);
     List<String> fetchedServers = [];
 
     for (final baseUrl in myGithubServerUrls) {
       try {
         final response = await http.get(
-          Uri.parse("$baseUrl?nocache=$timestamp"),
-          headers: {"Cache-Control": "no-cache, no-store, must-revalidate"},
+          Uri.parse("$baseUrl?v=$halfHourBucket"),
         ).timeout(const Duration(seconds: 6));
 
         if (response.statusCode == 200 && response.body.trim().isNotEmpty) {
@@ -412,7 +514,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF00B4D8),
-            content: Text("⚡ Updated ${fetchedServers.length} fast servers!"),
+            content: Text("⚡ Synced ${fetchedServers.length} cloud nodes via Edge CDN!"),
           ),
         );
       }
@@ -420,8 +522,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       setState(() {
         _isUpdatingServers = false;
         _statusSubtext = _serverList.isNotEmpty
-            ? "${_serverList.length} Cached Nodes Ready"
-            : "Tap sync icon to load nodes";
+            ? "${_serverList.length} Offline Cached Nodes Ready"
+            : "Tap sync or paste emergency node";
       });
     }
   }
@@ -475,12 +577,15 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
       });
 
       try {
-        final String candidateJson = _buildUnlockedConfigJson(_serverList[candidateIndex]);
+        final String candidateJson = _buildUnlockedConfigJson(
+          _serverList[candidateIndex],
+          useFragment: _fragmentEnabled,
+        );
         final int delay = await _flutterV2ray
             .getServerDelay(config: candidateJson)
             .timeout(const Duration(seconds: 3), onTimeout: () => -1);
 
-        if (delay > 0 && delay < 1500) {
+        if (delay > 0 && delay < 1600) {
           workingIndex = candidateIndex;
           verifiedPing = delay;
           workingConfigJson = candidateJson;
@@ -490,7 +595,10 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     }
 
     if (workingConfigJson.isEmpty) {
-      workingConfigJson = _buildUnlockedConfigJson(_serverList[_selectedServerIndex]);
+      workingConfigJson = _buildUnlockedConfigJson(
+        _serverList[_selectedServerIndex],
+        useFragment: _fragmentEnabled,
+      );
     }
 
     try {
@@ -506,8 +614,8 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
         _isConnected = true;
         _isConnecting = false;
         _statusSubtext = verifiedPing > 0
-            ? "Node #${workingIndex + 1} • $verifiedPing ms"
-            : "Node #${workingIndex + 1} Active";
+            ? "Node #${workingIndex + 1} • $verifiedPing ms${_fragmentEnabled ? ' (Fragment)' : ''}"
+            : "Node #${workingIndex + 1} Active${_fragmentEnabled ? ' (Fragment)' : ''}";
       });
       _startCountdown();
       _fetchConnectedIpAndLocation();
@@ -615,11 +723,27 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  "Select High-Speed Node",
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Select High-Speed Node",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00F5D4)),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _importEmergencyConfigFromClipboard();
+                      },
+                      icon: const Icon(Icons.content_paste_go_rounded, size: 16, color: Color(0xFF00BBF9)),
+                      label: const Text(
+                        "Paste Node",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF00BBF9), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Flexible(
@@ -698,7 +822,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
   }
 
   Widget _buildParallelNeonBars({required bool isLeft}) {
-    final List<double> widths = isLeft ? [26, 42, 58, 42, 26] : [26, 42, 58, 42, 26];
+    final List<double> widths = [26, 42, 58, 42, 26];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -834,16 +958,25 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
                                     child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 22),
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: "Sync Nodes",
-                                  icon: _isUpdatingServers
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
-                                        )
-                                      : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
-                                  onPressed: _isUpdatingServers ? null : () => _syncServersFromGithub(silent: false),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      tooltip: "Import Emergency Config",
+                                      icon: const Icon(Icons.content_paste_go_rounded, color: Color(0xFF00BBF9), size: 21),
+                                      onPressed: _importEmergencyConfigFromClipboard,
+                                    ),
+                                    IconButton(
+                                      tooltip: "Sync Nodes",
+                                      icon: _isUpdatingServers
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
+                                            )
+                                          : const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4)),
+                                      onPressed: _isUpdatingServers ? null : () => _syncServersFromGithub(silent: false),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -955,7 +1088,6 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
 
                 _buildHorizontalParallelLines(),
 
-                // وضعیت اتصال + نمایش زنده IP و موقعیت جغرافیایی سرور
                 Column(
                   children: [
                     Text(
@@ -1195,11 +1327,27 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           _buildDrawerItem(
             icon: Icons.home_outlined,
             title: "Home",
             onTap: () => Navigator.pop(context),
+          ),
+          _buildDrawerItem(
+            icon: Icons.security_Update_good_rounded,
+            title: _fragmentEnabled ? "TLS Fragment: ON (Anti-DPI)" : "TLS Fragment: OFF",
+            onTap: () {
+              Navigator.pop(context);
+              _toggleFragmentMode();
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.content_paste_go_rounded,
+            title: "Import Emergency Config",
+            onTap: () {
+              Navigator.pop(context);
+              _importEmergencyConfigFromClipboard();
+            },
           ),
           _buildDrawerItem(
             icon: Icons.verified_user_outlined,
@@ -1237,7 +1385,7 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
               Navigator.pop(context);
               _showInfoDialog(
                 "About Neon VPN",
-                "Version 2.2.0 (Google Play Edition)\n\nPowered by Xray-Core & Cloudflare Edge Nodes for high-speed, encrypted access worldwide.",
+                "Version 2.3.0 (Anti-Censorship Edition)\n\nPowered by Xray-Core, TLS Fragmentation & Edge CDN Nodes for uninterrupted encrypted access.",
               );
             },
           ),
@@ -1252,12 +1400,12 @@ class _VpnHomeScreenState extends State<VpnHomeScreen> {
     required VoidCallback onTap,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 4),
-      leading: Icon(icon, color: const Color(0xFF00F5D4), size: 24),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 2),
+      leading: Icon(icon, color: const Color(0xFF00F5D4), size: 23),
       title: Text(
         title,
         style: const TextStyle(
-          fontSize: 15,
+          fontSize: 14,
           fontWeight: FontWeight.w600,
           color: Colors.white,
         ),
