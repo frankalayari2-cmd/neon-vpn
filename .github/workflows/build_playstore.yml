@@ -23,7 +23,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Recreate Android Structure, Icon & Signing
+      - name: Recreate Android Structure, Convert Icon & Configure Signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
@@ -39,15 +39,29 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-          pip install pillow
+          sudo apt-get update && sudo apt-get install -y python3-pil
+
           python3 - << 'EOF'
           import os
+          import shutil
           from PIL import Image
 
+          # تبدیل مستقیم عکس لوگو به PNG واقعی در تمام سایزهای استاندارد اندروید
           if os.path.exists("assets/logo.png"):
+              shutil.rmtree("android/app/src/main/res/mipmap-anydpi-v26", ignore_errors=True)
               img = Image.open("assets/logo.png").convert("RGBA")
-              img = img.resize((512, 512), Image.Resampling.LANCZOS)
-              img.save("assets/logo_clean.png", format="PNG")
+              sizes = {
+                  "mipmap-mdpi": 48,
+                  "mipmap-hdpi": 72,
+                  "mipmap-xhdpi": 96,
+                  "mipmap-xxhdpi": 144,
+                  "mipmap-xxxhdpi": 192,
+              }
+              for folder, size in sizes.items():
+                  target_dir = f"android/app/src/main/res/{folder}"
+                  os.makedirs(target_dir, exist_ok=True)
+                  resized = img.resize((size, size), Image.LANCZOS)
+                  resized.save(f"{target_dir}/ic_launcher.png", format="PNG")
 
           manifest_path = "android/app/src/main/AndroidManifest.xml"
           with open(manifest_path, "r") as f:
@@ -98,10 +112,8 @@ jobs:
               f.write(g_content)
           EOF
 
-      - name: Install Dependencies & Apply Launcher Icons
-        run: |
-          flutter pub get
-          dart run flutter_launcher_icons
+      - name: Install Dependencies
+        run: flutter pub get
 
       - name: Build Signed Release App Bundle (AAB)
         run: flutter build appbundle --release
